@@ -10,6 +10,33 @@ window.esc = esc;
 window.fmt = fmt;
 window.toast = toast;
 
+// ดึงหัวข้อและรายละเอียดอาการ/ปัญหาอย่างแม่นยำจากทุก field ที่อาจถูกบันทึกมา
+window.getTicketTitle = function(t) {
+  if (!t) return 'แจ้งซ่อม/บริการ';
+  return t.title || t.items?.[0]?.item || t.sub_type || t.cat || 'แจ้งซ่อม/บริการ';
+};
+
+window.getTicketDesc = function(t) {
+  if (!t) return '-';
+  // 1. อาการจาก items[0].sym
+  const sym = t.items?.[0]?.sym;
+  if (sym && String(sym).trim()) return String(sym).trim();
+  // 2. อาการจาก desc หรือ details หรือ detail
+  if (t.desc && String(t.desc).trim()) return String(t.desc).trim();
+  if (t.details && String(t.details).trim()) return String(t.details).trim();
+  if (t.detail && String(t.detail).trim()) return String(t.detail).trim();
+  // 3. รวม items ทั้งหมดถ้ามี
+  if (Array.isArray(t.items) && t.items.length) {
+    const syms = t.items.map(i => i.sym || i.item).filter(Boolean);
+    if (syms.length) return syms.join(', ');
+  }
+  // 4. บันทึกเพิ่มเติม หรือหมายเหตุ
+  if (t.note && String(t.note).trim()) return String(t.note).trim();
+  return '-';
+};
+var getTicketTitle = window.getTicketTitle;
+var getTicketDesc = window.getTicketDesc;
+
 window.logh = (t, s, tag) => {
   const item = { s, at: Date.now() };
   if (tag) item.tag = tag;
@@ -256,7 +283,25 @@ function initApp() {
   }
 }
 
-// ป้องกัน Login ไม่แสดง: ให้ render ทันทีหาก DOM พร้อมแล้ว
+// ล็อค Scroll หน้าเว็บข้างหลังเมื่อเปิด Modal Dialog เพื่อป้องกันการเลื่อนซ้อนทับ (Scroll Chaining)
+function setupDialogScrollLock() {
+  const dlg = document.getElementById('dlg');
+  if (!dlg) return;
+  const observer = new MutationObserver(() => {
+    if (dlg.open) {
+      document.body.classList.add('dialog-open');
+    } else {
+      document.body.classList.remove('dialog-open');
+    }
+  });
+  observer.observe(dlg, { attributes: true, attributeFilter: ['open'] });
+  dlg.addEventListener('close', () => document.body.classList.remove('dialog-open'));
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupDialogScrollLock);
+} else {
+  setupDialogScrollLock();
+}
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => setTimeout(initApp, 0));
 } else {

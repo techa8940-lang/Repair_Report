@@ -181,8 +181,8 @@ function vTaskDetail() {
     `;
   }
 
-  const title = t.items?.[0]?.item || '-';
-  const sym = t.items?.[0]?.sym || '-';
+  const title = (typeof getTicketTitle === 'function') ? getTicketTitle(t) : (t.title || t.items?.[0]?.item || '-');
+  const sym = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.items?.[0]?.sym || t.desc || '-');
   const loc = `อาคาร ${t.bld || ''} ชั้น ${t.flr || ''}${t.room ? ' ' + t.room : ''}`;
   const reporterName = t.name || '-';
   const reporterTel = t.tel || '-';
@@ -282,11 +282,25 @@ function vMine() {
 }
 
 // ==========================================================================
-// Screen: ประวัติงานที่ทำเสร็จ (ของช่าง) - เรียงใหม่สุดขึ้นก่อน + ลิสต์ย่อ + กรองตามเดือน
 // ==========================================================================
+// Screen: ประวัติงานที่ทำเสร็จ (ของช่าง) - เรียงใหม่สุดขึ้นก่อน + ลิสต์ย่อ + กรองแยกปีและเดือน
+// ==========================================================================
+let techDoneYearFilter = 'all';
 let techDoneMonthFilter = 'all';
+
+window.setTechDoneYear = function(y) {
+  techDoneYearFilter = y;
+  render();
+};
+
 window.setTechDoneMonth = function(m) {
   techDoneMonthFilter = m;
+  render();
+};
+
+window.resetTechDoneFilters = function() {
+  techDoneYearFilter = 'all';
+  techDoneMonthFilter = 'all';
   render();
 };
 
@@ -308,41 +322,63 @@ window.toggleTechDoneDetail = function(id) {
 function vTechDone() {
   const isDevOrAdmin = me?.dev || me?.role === 'admin';
   // กรองเฉพาะงานที่เสร็จสิ้นแล้วของช่าง
-  let list = T.filter(t => (isDevOrAdmin ? (t.tech_name === me?.name || t.tech_id === me?.id || (me?.role === 'admin' && (t.status === 'done' || t.status === 'closed'))) : t.tech_id === me?.id) && (t.status === 'done' || t.status === 'closed'));
+  let fullList = T.filter(t => (isDevOrAdmin ? (t.tech_name === me?.name || t.tech_id === me?.id || (me?.role === 'admin' && (t.status === 'done' || t.status === 'closed'))) : t.tech_id === me?.id) && (t.status === 'done' || t.status === 'closed'));
 
   // 1. เรียงลำดับ: ให้อันใหม่ขึ้นบนสุด อันเก่าจะอยู่ล่าง (sort descending)
-  list.sort((a, b) => {
+  fullList.sort((a, b) => {
     const tA = new Date(a.done_at || a.updated_at || a.created_at || 0).getTime();
     const tB = new Date(b.done_at || b.updated_at || b.created_at || 0).getTime();
     return tB - tA;
   });
 
-  // รวบรวมรายชื่อเดือนที่มีงานทำเสร็จสำหรับตัวเลือก Dropdown
-  const monthMap = new Map();
-  list.forEach(t => {
+  // รวบรวมรายชื่อปีที่มีในระบบ
+  const yearSet = new Set();
+  fullList.forEach(t => {
     const d = new Date(t.done_at || t.created_at);
     if (!isNaN(d.getTime())) {
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
-      monthMap.set(key, label);
+      yearSet.add(d.getFullYear());
     }
   });
+  // ถ้ายังไม่มีปี ให้ใส่ปีปัจจุบัน
+  if (!yearSet.size) yearSet.add(new Date().getFullYear());
+  const sortedYears = Array.from(yearSet).sort((a, b) => b - a);
 
-  const allCount = list.length;
+  // รายชื่อเดือนภาษาไทย 12 เดือน
+  const thaiMonths = [
+    { num: '01', name: 'มกราคม' },
+    { num: '02', name: 'กุมภาพันธ์' },
+    { num: '03', name: 'มีนาคม' },
+    { num: '04', name: 'เมษายน' },
+    { num: '05', name: 'พฤษภาคม' },
+    { num: '06', name: 'มิถุนายน' },
+    { num: '07', name: 'กรกฎาคม' },
+    { num: '08', name: 'สิงหาคม' },
+    { num: '09', name: 'กันยายน' },
+    { num: '10', name: 'ตุลาคม' },
+    { num: '11', name: 'พฤศจิกายน' },
+    { num: '12', name: 'ธันวาคม' }
+  ];
 
-  // กรองตามเดือนที่เลือก
-  if (techDoneMonthFilter !== 'all') {
-    list = list.filter(t => {
-      const d = new Date(t.done_at || t.created_at);
-      if (isNaN(d.getTime())) return false;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      return key === techDoneMonthFilter;
-    });
-  }
+  const allCount = fullList.length;
 
-  const monthOptions = Array.from(monthMap.entries()).map(([k, lbl]) => `
-    <option value="${k}" ${techDoneMonthFilter === k ? 'selected' : ''}>เดือน ${lbl}</option>
-  `).join('');
+  // กรองข้อมูลตาม "ปี" และ "เดือน"
+  let list = fullList.filter(t => {
+    const d = new Date(t.done_at || t.created_at);
+    if (isNaN(d.getTime())) return true;
+    
+    // ตรวจสอบปี
+    if (techDoneYearFilter !== 'all') {
+      if (String(d.getFullYear()) !== String(techDoneYearFilter)) return false;
+    }
+    // ตรวจสอบเดือน
+    if (techDoneMonthFilter !== 'all') {
+      const mStr = String(d.getMonth() + 1).padStart(2, '0');
+      if (mStr !== String(techDoneMonthFilter)) return false;
+    }
+    return true;
+  });
+
+  const isFiltered = techDoneYearFilter !== 'all' || techDoneMonthFilter !== 'all';
 
   return `
     <div class="content-card">
@@ -350,22 +386,45 @@ function vTechDone() {
         <h2 style="font-size:22px; font-weight:800; display:flex; align-items:center; gap:8px;">
           <span>✅</span> ประวัติงานที่ทำเสร็จ
         </h2>
-        <span class="badge badge-done" style="font-size:15px; padding:6px 14px;">รวม ${list.length} งาน</span>
+        <span class="badge badge-done" style="font-size:15px; padding:6px 14px;">พบ ${list.length} งาน ${isFiltered ? `(จากทั้งหมด ${allCount} งาน)` : ''}</span>
       </div>
 
-      <!-- Filter Bar: ดูทั้งหมด หรือ เลือกกรองดูของเดือนนั้นๆ -->
-      <div class="done-filter-bar">
-        <div class="done-filter-left">
-          <button type="button" class="done-filter-pill ${techDoneMonthFilter === 'all' ? 'active' : ''}" onclick="setTechDoneMonth('all')">
+      <!-- Filter Bar: ปุ่มดูทั้งหมด + Dropdown เลือกปี + Dropdown เลือกเดือน -->
+      <div class="done-filter-bar" style="background:#ffffff; border:1.5px solid #cbd5e1; padding:14px 18px; border-radius:14px; margin-bottom:18px;">
+        <div class="done-filter-left" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <button type="button" class="done-filter-pill ${!isFiltered ? 'active' : ''}" onclick="resetTechDoneFilters()">
             ดูทั้งหมด (${allCount})
           </button>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:14px; font-weight:700; color:#475569;">กรองตามเดือน:</span>
-          <select class="done-month-select" onchange="setTechDoneMonth(this.value)">
-            <option value="all" ${techDoneMonthFilter === 'all' ? 'selected' : ''}>-- ทุกช่วงเวลา (${allCount}) --</option>
-            ${monthOptions}
-          </select>
+
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <!-- 1. เลือกปี -->
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label style="font-size:14px; font-weight:700; color:#0b2545;">📅 เลือกปี:</label>
+            <select class="done-month-select" style="min-width:140px; height:42px; font-size:14.5px; font-weight:700;" onchange="setTechDoneYear(this.value)">
+              <option value="all" ${techDoneYearFilter === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
+              ${sortedYears.map(y => `
+                <option value="${y}" ${String(techDoneYearFilter) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <!-- 2. เลือกเดือน -->
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label style="font-size:14px; font-weight:700; color:#0b2545;">🗓️ เลือกเดือน:</label>
+            <select class="done-month-select" style="min-width:150px; height:42px; font-size:14.5px; font-weight:700;" onchange="setTechDoneMonth(this.value)">
+              <option value="all" ${techDoneMonthFilter === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
+              ${thaiMonths.map(m => `
+                <option value="${m.num}" ${techDoneMonthFilter === m.num ? 'selected' : ''}>${m.name}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          ${isFiltered ? `
+            <button type="button" class="btn btn-outline btn-sm" onclick="resetTechDoneFilters()" style="color:var(--danger); border-color:#cbd5e1; height:40px; font-size:13.5px;" title="ล้างตัวกรอง">
+              ✕ รีเซ็ต
+            </button>
+          ` : ''}
         </div>
       </div>
 
@@ -377,6 +436,8 @@ function vTechDone() {
             : (t.created_at ? fmt(t.created_at) : '-');
           
           const usedMats = (typeof U !== 'undefined' ? U : []).filter(u => u.ticket_id === t.id);
+          const titleText = (typeof getTicketTitle === 'function') ? getTicketTitle(t) : (t.title || 'แจ้งซ่อม');
+          const descText = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || '-');
 
           return `
             <div class="done-compact-item" id="done_item_${t.id}">
@@ -385,7 +446,7 @@ function vTechDone() {
                 <div class="done-compact-left">
                   <span class="done-compact-id">${esc(t.id)}</span>
                   <span class="badge badge-done" style="font-size:12px; padding:3px 8px;">✓ เสร็จสิ้น</span>
-                  <span class="done-compact-title">${esc(t.title || 'แจ้งซ่อม')}</span>
+                  <span class="done-compact-title">${esc(titleText)}</span>
                   <span class="done-compact-loc">📍 อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')} (ห้อง ${esc(t.room || '-')})</span>
                 </div>
                 <div class="done-compact-right">
@@ -397,37 +458,82 @@ function vTechDone() {
               <!-- Collapsible Body รายละเอียดทั้งหมด -->
               <div class="done-compact-body" id="done_body_${t.id}">
                 <div style="display:grid; grid-template-columns: 1fr; gap:14px;">
-                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:14px;">
-                    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
                       <b style="color:#0b2545; font-size:16px;">ข้อมูลใบงานและการดำเนินงาน</b>
                       <span class="mut" style="font-size:13.5px;">ผู้แจ้ง: <b>${esc(t.name || t.reporter_name || t.email || '-')}</b> (โทร: ${esc(t.tel || '-')})</span>
                     </div>
-                    <div style="font-size:14.5px; line-height:1.6; color:#334155;">
-                      <div><b>รายละเอียดอาการ/ปัญหา:</b> ${esc(t.desc || '-')}</div>
-                      ${t.note ? `<div style="margin-top:4px; color:#0369a1;"><b>บันทึกช่าง/หมายเหตุ:</b> ${esc(t.note)}</div>` : ''}
+                    <div style="font-size:15px; line-height:1.6; color:#334155;">
+                      <div style="margin-bottom:6px;"><b>หัวข้อ:</b> <span style="font-weight:700; color:#0b2545;">${esc(titleText)}</span></div>
+                      <div style="background:#f8fafc; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:8px;">
+                        <b>รายละเอียดอาการ/ปัญหา:</b> <span style="font-weight:600; color:#0f172a;">${esc(descText)}</span>
+                      </div>
+                      ${t.note ? `<div style="margin-top:6px; color:#0369a1;"><b>บันทึกช่าง/หมายเหตุ:</b> ${esc(t.note)}</div>` : ''}
                       ${t.budget ? `<div style="margin-top:4px;"><b>งบประมาณที่ใช้:</b> ${Number(t.budget).toLocaleString()} บาท</div>` : ''}
                     </div>
 
                     ${(t.photos && t.photos.length) ? `
-                      <div style="margin-top:12px;">
-                        <b style="font-size:13px; color:#475569;">📷 รูปภาพตอนแจ้ง:</b>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
-                          ${t.photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:70px; height:70px; object-fit:cover; border-radius:6px; cursor:zoom-in; border:1px solid #cbd5e1;">`).join('')}
+                      <div style="margin-top:14px;">
+                        <b style="font-size:13.5px; color:#475569;">📷 รูปภาพตอนแจ้ง:</b>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                          ${t.photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:75px; height:75px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:1px solid #cbd5e1;">`).join('')}
                         </div>
                       </div>
                     ` : ''}
 
                     ${(t.done_photos && t.done_photos.length) ? `
-                      <div style="margin-top:12px;">
-                        <b style="font-size:13px; color:#10b981;">📷 รูปผลงานหลังดำเนินการเสร็จ:</b>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
-                          ${t.done_photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:70px; height:70px; object-fit:cover; border-radius:6px; cursor:zoom-in; border:1.5px solid #10b981;">`).join('')}
+                      <div style="margin-top:14px;">
+                        <b style="font-size:13.5px; color:#10b981;">📷 รูปผลงานหลังดำเนินการเสร็จ:</b>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                          ${t.done_photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:75px; height:75px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:1.5px solid #10b981;">`).join('')}
                         </div>
                       </div>
                     ` : ''}
                   </div>
 
                   <!-- รายการวัสดุที่ใช้ไปในงานนี้ -->
+                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+                    <b style="color:#0b2545; font-size:15.5px; display:flex; align-items:center; gap:6px;">
+                      <span>📦</span> รายการวัสดุอุปกรณ์ที่ใช้ในงานนี้ (${usedMats.length} รายการ)
+                    </b>
+                    ${usedMats.length ? `
+                      <div style="margin-top:10px; overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; font-size:14.5px;">
+                          <thead>
+                            <tr style="background:#f8fafc; text-align:left; color:#64748b;">
+                              <th style="padding:8px 12px; border-bottom:1px solid #e2e8f0;">วัสดุ</th>
+                              <th style="padding:8px 12px; border-bottom:1px solid #e2e8f0;">จำนวน</th>
+                              <th style="padding:8px 12px; border-bottom:1px solid #e2e8f0;">หน่วย</th>
+                              <th style="padding:8px 12px; border-bottom:1px solid #e2e8f0;">ผู้เบิก</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${usedMats.map(u => `
+                              <tr>
+                                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-weight:700; color:#0f172a;">${esc(u.name)}</td>
+                                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; color:#0284c7; font-weight:800; font-size:16px;">${u.qty}</td>
+                                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; color:#475569;">${esc(u.unit)}</td>
+                                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; color:#64748b;">${esc(u.tech_name || '-')}</td>
+                              </tr>
+                            `).join('')}
+                          </tbody>
+                        </table>
+                      </div>
+                    ` : '<div class="mut" style="font-size:13.5px; margin-top:8px;">ไม่มีการเบิกใช้วัสดุอุปกรณ์</div>'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('') : `
+          <div class="content-card" style="text-align:center; padding:40px; color:#64748b; font-size:16px;">
+            ${!isFiltered ? 'ยังไม่มีประวัติงานที่ทำเสร็จ' : 'ไม่พบงานที่ทำเสร็จในช่วงเวลาที่เลือก'}
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
                   <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:14px;">
                     <b style="color:#0b2545; font-size:15px; display:flex; align-items:center; gap:6px;">
                       <span>📦</span> รายการวัสดุอุปกรณ์ที่ใช้ในงานนี้ (${usedMats.length} รายการ)
@@ -790,9 +896,9 @@ window.openAct = function (id) {
           `}
 
           <div class="act-info-col">
-            <div class="act-info-title">หัวข้อ : ${esc(t.title || 'แจ้งซ่อม/บริการ')}</div>
+            <div class="act-info-title">หัวข้อ : ${esc(getTicketTitle(t))}</div>
             <div>📍 <b>อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')}</b> ห้อง/บริเวณ ${esc(t.room || '-')}</div>
-            <div style="color:#475569;">📄 <b>รายละเอียด :</b> ${esc(t.desc || '-')}</div>
+            <div style="color:#475569;">📄 <b>รายละเอียด :</b> ${esc(getTicketDesc(t))}</div>
           </div>
 
           <div class="act-reporter-col">

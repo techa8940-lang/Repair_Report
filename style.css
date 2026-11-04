@@ -2065,17 +2065,27 @@ dialog::backdrop {
 }
 
 
+/* ล็อค Scroll หน้าเว็บข้างหลังเมื่อเปิด Modal Dialog */
+body.dialog-open {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
 /* ==========================================================================
    Step-by-Step Task Update Modal (SciPark Blue & Navy Theme)
    ========================================================================== */
 dialog#dlg.act-dialog-wide {
   width: min(840px, 96vw) !important;
   max-width: 840px !important;
+  max-height: 90vh !important;
+  margin: auto !important;
   padding: 0 !important;
   border-radius: 20px !important;
-  overflow: hidden !important;
-  border: 1px solid #bfdbfe !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  border: 1.5px solid #bfdbfe !important;
   box-shadow: 0 25px 50px -12px rgba(11, 37, 69, 0.25) !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 .act-modal-container {
@@ -2084,6 +2094,8 @@ dialog#dlg.act-dialog-wide {
   background: #f8fafc;
   color: var(--text-main);
   font-family: 'Prompt', 'Noto Sans Thai', sans-serif;
+  min-height: 100%;
+  overscroll-behavior: contain;
 }
 
 /* Header Summary Card */
