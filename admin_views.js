@@ -497,6 +497,7 @@ window.assign = async function (id) {
     if (v && !updateData.tech_id) t.tech_id = v;
   }
   toast(v ? `มอบหมายงานให้ ${p ? p.name : 'ช่าง'} แล้ว (สถานะ: กำลังดำเนินการ)` : 'ยกเลิกการมอบหมายแล้ว');
+  if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();
   go(); 
 };
 
@@ -515,6 +516,7 @@ window.del = async function (id) {
   } catch (err) {}
   if (t) Object.assign(t, updateData);
   toast('ลบงานเรียบร้อยแล้ว');
+  if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();
   go();
 };
 

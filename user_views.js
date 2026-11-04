@@ -122,9 +122,12 @@ function vHome() {
         <h2>อุทยานวิทยาศาสตร์ มหาวิทยาลัยนเรศวร</h2>
         <p>“พร้อมดูแล เพื่อการทำงานที่ต่อเนื่อง รวดเร็ว ปลอดภัย”</p>
       </div>
-      <div class="hero-badge-nusp">
-        <b>NUSP ✦</b>
-        <span>Naresuan University<br>Science Park</span>
+      <div class="hero-badge-nusp" style="display:flex; align-items:center; gap:12px;">
+        <img src="nu_seed_logo.png" alt="NU SEED" style="height:46px; width:auto; object-fit:contain;">
+        <div>
+          <b>NU SEED ✦</b>
+          <span>Naresuan University<br>Science Park</span>
+        </div>
       </div>
     </div>
 
@@ -594,14 +597,18 @@ window.confirmSubmitReport = async function(e) {
 
     const payload = {
       id: no,
+      user_id: me?.id && isUUID(me.id) ? me.id : null,
       name: me?.name ? (newReportDraft.org ? `${me.name} (${newReportDraft.org})` : me.name) : 'ผู้แจ้งทั่วไป',
       email: (me?.email || 'user@nusp.or.th').toLowerCase(),
       tel: telCombined,
       cat: cat,
       bld: chosenBld,
+      bld_other: newReportDraft.bld === 'อื่นๆ' ? newReportDraft.bld_other : null,
       flr: newReportDraft.flr || '1',
       room: newReportDraft.room || '',
       types: [chosenType],
+      sub_type: chosenType,
+      sub_type_other: newReportDraft.sub_type === 'อื่นๆ' ? newReportDraft.sub_type_other : null,
       items: [{
         item: newReportDraft.title,
         sym: newReportDraft.details,
@@ -669,7 +676,7 @@ function vTrack() {
       </form>
     </div>
 
-    ${found === null ? '<div class="content-card mut" style="max-width:700px; margin:auto; text-align:center;">ไม่พบใบงาน โปรดตรวจสอบเลขที่ใบแจ้งซ่อมอีกครั้ง</div>' : found ? `<div style="max-width:700px; margin:auto;">${card(found, steps(found))}</div>` : ''}
+    ${found === null ? '<div class="content-card mut" style="max-width:860px; margin:auto; text-align:center;">ไม่พบใบงาน โปรดตรวจสอบเลขที่ใบแจ้งซ่อมอีกครั้ง</div>' : found ? `<div style="max-width:860px; margin:auto;">${card(found, steps(found))}</div>` : ''}
   `;
 }
 
@@ -678,8 +685,11 @@ function vHistory() {
   const myT = JSON.parse(localStorage.getItem('myT') || '[]');
   
   let filtered = myT;
-  if (hFil === 'pending') filtered = myT.filter(t => t.status === 'accepted' || t.status === 'doing' || !t.status);
-  if (hFil === 'done') filtered = myT.filter(t => t.status === 'done');
+  if (hFil === 'pending') filtered = myT.filter(t => t.status !== 'done' && t.status !== 'closed' && t.status !== 'deleted');
+  if (hFil === 'done') filtered = myT.filter(t => t.status === 'done' || t.status === 'closed');
+
+  const pendingCount = myT.filter(t => t.status !== 'done' && t.status !== 'closed' && t.status !== 'deleted').length;
+  const doneCount = myT.filter(t => t.status === 'done' || t.status === 'closed').length;
 
   return `
     <div class="content-card">
@@ -693,8 +703,8 @@ function vHistory() {
       <div class="filter-bar">
         <div class="filter-pills">
           <button class="filter-pill ${hFil === 'all' ? 'active' : ''}" onclick="setHFil('all')">ทั้งหมด (${myT.length})</button>
-          <button class="filter-pill ${hFil === 'pending' ? 'active' : ''}" onclick="setHFil('pending')">รอดำเนินการ (${myT.filter(t => t.status !== 'done').length})</button>
-          <button class="filter-pill ${hFil === 'done' ? 'active' : ''}" onclick="setHFil('done')">เสร็จสิ้น (${myT.filter(t => t.status === 'done').length})</button>
+          <button class="filter-pill ${hFil === 'pending' ? 'active' : ''}" onclick="setHFil('pending')">รอดำเนินการ (${pendingCount})</button>
+          <button class="filter-pill ${hFil === 'done' ? 'active' : ''}" onclick="setHFil('done')">เสร็จสิ้น (${doneCount})</button>
         </div>
       </div>
 
@@ -720,8 +730,15 @@ function vHistory() {
                 else if (pTag.includes('ติดปัญหา') || pTag.includes('ประสานงาน')) badge = '<span class="badge badge-issue"><span class="badge-dot"></span> ⚠️ ติดปัญหา</span>';
                 else if (pTag.includes('ติดตั้ง')) badge = '<span class="badge badge-install"><span class="badge-dot"></span> 🛠️ กำลังติดตั้ง</span>';
                 else badge = '<span class="badge badge-doing"><span class="badge-dot"></span> กำลังดำเนินการ</span>';
+              } else if (t.status === 'checking') {
+                badge = '<span class="badge badge-doing" style="background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd;"><span class="badge-dot" style="background:#0284c7;"></span> ✔️ ตรวจสอบงาน</span>';
+              } else if (t.status === 'done') {
+                badge = '<span class="badge badge-done"><span class="badge-dot"></span> ' + ((t.done_type === 'ติดตั้ง/ต่อเติม' || t.cat === 'ติดตั้ง/ต่อเติม') ? '🛠️ ติดตั้งเสร็จแล้ว' : '✓ ซ่อมเสร็จแล้ว') + '</span>';
+              } else if (t.status === 'closed') {
+                badge = '<span class="badge badge-done" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;"><span class="badge-dot" style="background:#475569;"></span> ⭐ ปิดงานแล้ว</span>';
+              } else if (t.status === 'deleted') {
+                badge = '<span class="badge badge-canceled"><span class="badge-dot"></span> ✕ ยกเลิกแล้ว</span>';
               }
-              if (t.status === 'done') badge = '<span class="badge badge-done"><span class="badge-dot"></span> ' + ((t.done_type === 'ติดตั้ง/ต่อเติม' || t.cat === 'ติดตั้ง/ต่อเติม') ? 'ติดตั้งเสร็จแล้ว' : 'ซ่อมเสร็จแล้ว') + '</span>';
 
               return `
                 <tr>
@@ -741,39 +758,198 @@ function vHistory() {
       </div>
     </div>
 
-    ${found ? `<div style="max-width:800px; margin:20px auto 0;">${card(found, steps(found))}</div>` : ''}
+    ${found ? `<div style="max-width:860px; margin:24px auto 0;">${card(found, steps(found))}</div>` : ''}
   `;
 }
 
-// Screen: ข้อมูลส่วนตัว (Profile)
+// ==========================================================================
+// Screen: ข้อมูลส่วนตัว (Profile) - แสดงทุกข้อมูล อันไหนไม่มีให้แดช (-) ไว้ + แก้ไขได้
+// ==========================================================================
+let isEditingProfile = false;
+window.setProfileEditMode = function(editing) {
+  isEditingProfile = editing;
+  render();
+};
+
+window.saveProfile = async function(e) {
+  if (e) e.preventDefault();
+  const nameVal = (document.getElementById('prof_name')?.value || '').trim();
+  const telVal = (document.getElementById('prof_tel')?.value || '').trim();
+  const telIntVal = (document.getElementById('prof_tel_internal')?.value || '').trim();
+  const orgVal = (document.getElementById('prof_org')?.value || '').trim();
+  const skillVal = (document.getElementById('prof_skill')?.value || '').trim();
+
+  if (!nameVal) return toast('กรุณาระบุชื่อ-นามสกุล');
+
+  toast('กำลังบันทึกข้อมูลส่วนตัว...');
+
+  const updatedProfile = {
+    name: nameVal,
+    tel: telVal || null,
+    tel_internal: telIntVal || null,
+    org: orgVal || null
+  };
+
+  if (me?.role === 'tech') {
+    updatedProfile.skill = skillVal || null;
+  }
+
+  // อัปเดตในหน่วยความจำและ sessionStorage ทันที
+  Object.assign(me, updatedProfile);
+  sessionStorage.setItem('repair_me', JSON.stringify(me));
+
+  // บันทึกค่าไว้ใน localStorage สำหรับกรอกฟอร์มแจ้งซ่อมอัตโนมัติ
+  if (telVal) localStorage.setItem('profile_tel', telVal);
+  if (orgVal) localStorage.setItem('profile_org', orgVal);
+  if (telIntVal) localStorage.setItem('profile_tel_internal', telIntVal);
+  if (nameVal) localStorage.setItem('profile_name', nameVal);
+
+  // อัปเดตลงตาราง public.profiles ใน Supabase
+  try {
+    if (me?.id && typeof isUUID === 'function' && isUUID(me.id)) {
+      const { error } = await sb.from('profiles').update(updatedProfile).eq('id', me.id);
+      if (error) console.warn('Supabase profile update warning:', error);
+    } else if (me?.id) {
+      const { error } = await sb.from('profiles').upsert({ id: me.id, role: me.role, ...updatedProfile }, { onConflict: 'id' });
+      if (error) console.warn('Supabase profile upsert warning:', error);
+    }
+  } catch (err) {
+    console.warn('Profile save db error:', err);
+  }
+
+  isEditingProfile = false;
+  toast('บันทึกข้อมูลส่วนตัวเรียบร้อยแล้ว');
+  render();
+};
+
 function vProfile() {
+  const emailDisplay = me?.email || localStorage.getItem('last_reporter_email') || '-';
+  const roleDisplay = me?.role === 'admin' 
+    ? 'ผู้ดูแลระบบ (Admin)' 
+    : me?.role === 'tech' 
+      ? 'ช่างซ่อมบำรุง (Technician)' 
+      : 'ผู้แจ้งซ่อม (บุคลากร / ทั่วไป)';
+
+  // ถ้าอยู่ในโหมดแก้ไขข้อมูล
+  if (isEditingProfile) {
+    return `
+      <div class="profile-card-modern">
+        <div class="profile-header-banner">
+          <div class="profile-avatar-circle">
+            ${(me?.name || 'N').charAt(0)}
+          </div>
+          <div class="profile-header-name">แก้ไขข้อมูลส่วนตัว</div>
+          <div class="profile-header-role">บทบาท: ${roleDisplay}</div>
+        </div>
+
+        <form class="profile-content-body" onsubmit="saveProfile(event)">
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">ชื่อ - นามสกุล *</label>
+              <input class="form-control" id="prof_name" value="${esc(me?.name || '')}" placeholder="เช่น นายสมชาย ใจดี" required style="font-size:16px; padding:10px 14px;">
+            </div>
+
+            <div>
+              <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">อีเมล (บัญชีผู้ใช้)</label>
+              <input class="form-control" value="${esc(emailDisplay)}" disabled style="background:#f1f5f9; color:#64748b; font-size:15px; padding:10px 14px;">
+              <small class="mut" style="font-size:12.5px; margin-top:3px; display:block;">* อีเมลใช้เป็นบัญชีเข้าสู่ระบบ ไม่สามารถแก้ไขได้</small>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div>
+                <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">เบอร์โทรศัพท์มือถือ</label>
+                <input class="form-control" id="prof_tel" value="${esc(me?.tel || '')}" placeholder="เช่น 081-234-5678" style="font-size:16px; padding:10px 14px;">
+              </div>
+              <div>
+                <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">เบอร์ต่อภายใน</label>
+                <input class="form-control" id="prof_tel_internal" value="${esc(me?.tel_internal || '')}" placeholder="เช่น 8899" style="font-size:16px; padding:10px 14px;">
+              </div>
+            </div>
+
+            <div>
+              <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">หน่วยงาน / สังกัด / ฝ่าย</label>
+              <input class="form-control" id="prof_org" value="${esc(me?.org || '')}" placeholder="เช่น ฝ่ายโครงสร้างพื้นฐาน อุทยานวิทยาศาสตร์ มน." style="font-size:16px; padding:10px 14px;">
+            </div>
+
+            ${me?.role === 'tech' ? `
+              <div>
+                <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">สายงานความชำนาญ (ช่าง)</label>
+                <input class="form-control" id="prof_skill" value="${esc(me?.skill || '')}" placeholder="เช่น ระบบปรับอากาศ, ระบบไฟฟ้า, ระบบประปา" style="font-size:16px; padding:10px 14px;">
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="profile-actions-bar" style="margin-top:28px;">
+            <button type="button" class="btn btn-outline" style="min-width:120px; font-size:15.5px;" onclick="setProfileEditMode(false)">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary" style="min-width:180px; font-size:16px; font-weight:800; background:linear-gradient(135deg, #0b2545 0%, #134074 100%);">💾 บันทึกการเปลี่ยนแปลง</button>
+          </div>
+        </form>
+      </div>
+    `;
+  }
+
+  // โหมดแสดงข้อมูลปกติ (แสดงทุกข้อมูลที่มี อันไหนไม่มีให้แดช - ไว้)
   return `
-    <div class="content-card" style="max-width: 600px; margin: 20px auto; border-radius: var(--radius-lg); padding: 32px 24px;">
-      <div style="text-align:center; margin-bottom: 24px;">
-        <div class="user-avatar" style="width:80px; height:80px; font-size:32px; margin:0 auto 14px; background:var(--primary);">
+    <div class="profile-card-modern">
+      <div class="profile-header-banner">
+        <div class="profile-avatar-circle">
           ${(me?.name || 'N').charAt(0)}
         </div>
-        <h2 style="font-size:22px; font-weight:800; color:var(--text-main); margin-bottom:6px;">${esc(me?.name || 'ผู้ใช้งาน')}</h2>
-        <span class="badge badge-doing" style="font-size:14px; padding:6px 14px;">บทบาท: ${me?.role === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : me?.role === 'tech' ? 'ช่างซ่อมบำรุง (Technician)' : 'ผู้แจ้งซ่อม (บุคลากร/ทั่วไป)'}</span>
+        <div class="profile-header-name">${esc(me?.name || 'ผู้ใช้งาน')}</div>
+        <div class="profile-header-role">บทบาท: ${roleDisplay}</div>
       </div>
 
-      <div style="background:var(--bg-subtle); border-radius:var(--radius-md); padding:20px; border:1px solid var(--border); font-size:16px; display:flex; flex-direction:column; gap:16px;">
-        <div class="row sp" style="flex-wrap:wrap; gap:8px;">
-          <span class="mut" style="font-weight:700;">อีเมล:</span>
-          <b>${esc(me?.email || '-')}</b>
-        </div>
-        <div class="row sp" style="flex-wrap:wrap; gap:8px;">
-          <span class="mut" style="font-weight:700;">หน่วยงาน/สังกัด:</span>
-          <b>อุทยานวิทยาศาสตร์ มหาวิทยาลัยนเรศวร (NUSP)</b>
-        </div>
-        <div class="row sp" style="flex-wrap:wrap; gap:8px;">
-          <span class="mut" style="font-weight:700;">สถานะบัญชี:</span>
-          <span style="color:var(--success); font-weight:700;">✓ ใช้งานได้ปกติ</span>
-        </div>
-      </div>
+      <div class="profile-content-body">
+        <div class="profile-grid-details">
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>👤</span> ชื่อ - นามสกุล:</span>
+            <span class="profile-val-text">${me?.name ? esc(me.name) : '<span class="profile-empty-dash">-</span>'}</span>
+          </div>
 
-      <div style="margin-top:28px; text-align:center;">
-        <button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger); min-height:48px; font-size:16px; font-weight:700; width:100%; max-width:240px;" onclick="signOut()">ออกจากระบบ</button>
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>✉️</span> อีเมล (Email):</span>
+            <span class="profile-val-text">${emailDisplay !== '-' ? esc(emailDisplay) : '<span class="profile-empty-dash">-</span>'}</span>
+          </div>
+
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>🛡️</span> บทบาทในระบบ:</span>
+            <span class="badge badge-doing" style="font-size:13.5px; padding:4px 12px;">${roleDisplay}</span>
+          </div>
+
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>📞</span> เบอร์โทรศัพท์มือถือ:</span>
+            <span class="profile-val-text">${me?.tel ? esc(me.tel) : '<span class="profile-empty-dash">-</span>'}</span>
+          </div>
+
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>☎️</span> เบอร์โทรศัพท์ภายใน:</span>
+            <span class="profile-val-text">${me?.tel_internal ? esc(me.tel_internal) : '<span class="profile-empty-dash">-</span>'}</span>
+          </div>
+
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>🏢</span> หน่วยงาน / สังกัด:</span>
+            <span class="profile-val-text">${me?.org ? esc(me.org) : '<span class="profile-empty-dash">-</span>'}</span>
+          </div>
+
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>🔧</span> ความชำนาญ / สายงานช่าง:</span>
+            <span class="profile-val-text">${me?.skill ? esc(me.skill) : '<span class="profile-empty-dash">-</span>'}</span>
+          </div>
+
+          <div class="profile-detail-row">
+            <span class="profile-label-text"><span>🟢</span> สถานะบัญชี:</span>
+            <span style="color:#10b981; font-weight:700;">✓ ใช้งานได้ปกติ</span>
+          </div>
+        </div>
+
+        <div class="profile-actions-bar">
+          <button type="button" class="btn btn-primary" style="min-width:180px; font-size:15.5px; font-weight:700; background:linear-gradient(135deg, #0b2545 0%, #134074 100%);" onclick="setProfileEditMode(true)">
+            ✏️ แก้ไขข้อมูลส่วนตัว
+          </button>
+          <button type="button" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger); min-width:140px; font-size:15.5px; font-weight:700;" onclick="signOut()">
+            ออกจากระบบ
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -783,20 +959,41 @@ window.quickTrack = async function (no, email) {
   toast('กำลังโหลดข้อมูลใบงาน ' + no + '...');
   lastTrackEmail = email;
   let data = null;
+
+  // 1. ลองดึงจากฐานข้อมูลตาราง tickets โดยตรง (แม่นยำที่สุด)
   try {
-    const res = await sb.rpc('track_ticket', { p_id: no, p_email: email });
-    data = res.data;
+    const { data: ticketData } = await sb.from('tickets').select('*').eq('id', no).maybeSingle();
+    if (ticketData) data = ticketData;
   } catch (err) {}
+
+  // 2. ถ้าไม่เจอลองเรียกผ่าน rpc track_ticket
+  if (!data) {
+    try {
+      const res = await sb.rpc('track_ticket', { p_id: no, p_email: email });
+      if (res?.data) {
+        data = Array.isArray(res.data) ? res.data[0] : res.data;
+      }
+    } catch (err) {}
+  }
+
+  // 3. ถ้ายังไม่เจอลองหาในตัวแปร T
+  if (!data) {
+    data = (typeof T !== 'undefined' ? T : []).find(x => x.id === no) || null;
+  }
+
   if (data) {
     found = data;
   } else {
-    // Search in local ticket list T (No fake mock ticket fallback)
-    found = (typeof T !== 'undefined' ? T : []).find(x => x.id === no) || null;
-    if (!found) {
-      toast('ไม่พบข้อมูลใบแจ้งซ่อมเลขที่ ' + no);
-    }
+    found = null;
+    toast('ไม่พบข้อมูลใบแจ้งซ่อมเลขที่ ' + no);
   }
   render();
+
+  // Scroll ให้ผู้ใช้เห็นการ์ดรายละเอียดด้านล่างทันที
+  setTimeout(() => {
+    const cardEl = document.querySelector('.content-card[style*="margin:20px auto 0"]');
+    if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
 };
 
 window.trackT = async function (e) {

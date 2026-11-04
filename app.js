@@ -21,9 +21,11 @@ window.isUUID = s => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]
 var isUUID = window.isUUID;
 
 const ST = { 
-  accepted: ['รับเรื่อง', 'var(--primary)'], 
+  accepted: ['รับเรื่องแล้ว', 'var(--primary)'], 
   doing: ['กำลังดำเนินการ', 'var(--warning)'], 
+  checking: ['ตรวจสอบงาน', '#0284c7'],
   done: ['เสร็จสิ้น', 'var(--success)'], 
+  closed: ['ปิดงานแล้ว', '#475569'],
   deleted: ['ยกเลิก/ลบ', 'var(--danger)'] 
 };
 window.ST = ST;
@@ -82,21 +84,104 @@ window.copyNo = function(no, e) {
   toast('คัดลอก ' + no + ' แล้ว!');
 };
 
+// ==========================================================================
+// Ticket Real-time Sync & History Loader
+// ==========================================================================
+const ticketBC = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('nusp_ticket_sync') : null;
+if (ticketBC) {
+  ticketBC.onmessage = (msg) => {
+    if (msg?.data?.type === 'TICKET_UPDATED') {
+      if (window.me && (window.me.role === 'admin' || window.me.role === 'tech')) {
+        window.go(true);
+      } else {
+        window.loadHistoryData();
+      }
+    }
+  };
+}
+
+window.broadcastTicketUpdate = function() {
+  try {
+    if (ticketBC) ticketBC.postMessage({ type: 'TICKET_UPDATED', at: Date.now() });
+    localStorage.setItem('nusp_ticket_last_update', String(Date.now()));
+  } catch (e) {}
+};
+
+window.addEventListener('storage', (e) => {
+  if (e.key === 'nusp_ticket_last_update') {
+    if (window.me && (window.me.role === 'admin' || window.me.role === 'tech')) {
+      window.go(true);
+    } else {
+      window.loadHistoryData();
+    }
+  }
+});
+
 window.loadHistoryData = async function() {
   const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+  const reporterEmail = (window.me && window.me.role === 'reporter' ? window.me.email : '') || localStorage.getItem('last_reporter_email') || '';
+
+  // 1. ถ้ามีอีเมลผู้แจ้ง ให้ลองดึงรายการล่าสุดจาก Supabase เพื่อให้สถานะอัปเดตทันที
+  if (reporterEmail) {
+    try {
+      const { data: ticketsFromEmail } = await sb.from('tickets')
+        .select('*')
+        .ilike('email', reporterEmail.trim())
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (ticketsFromEmail && ticketsFromEmail.length) {
+        const emailMap = new Map();
+        ticketsFromEmail.forEach(t => {
+          emailMap.set(t.id, {
+            no: t.id,
+            title: t.title || 'แจ้งซ่อม/บริการ',
+            type: t.cat || 'ซ่อมแซม',
+            location: `อาคาร ${t.bld || '-'} ชั้น ${t.flr || '-'}`,
+            room: t.room || '-',
+            email: t.email,
+            status: t.status,
+            date: t.created_at ? new Date(t.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'
+          });
+        });
+
+        // รวมกับประวัติเดิมที่อาจมีในเครื่อง
+        myT.forEach(oldT => {
+          if (!emailMap.has(oldT.no)) emailMap.set(oldT.no, oldT);
+        });
+
+        const merged = Array.from(emailMap.values());
+        localStorage.setItem('myT', JSON.stringify(merged));
+        if (window.tab === 'history' || window.tab === 'home') render();
+        return;
+      }
+    } catch (e) {
+      console.warn('loadHistoryData direct email fetch warning:', e);
+    }
+  }
+
+  // 2. ตรวจสอบสถานะใบงานทีละรายการตามประวัติ myT
   if (!myT.length) return;
-  const promises = myT.map(t => sb.rpc('track_ticket', { p_id: t.no, p_email: t.email }).then(r => r?.data || null, () => null));
+  const promises = myT.map(t => 
+    sb.rpc('track_ticket', { p_id: t.no, p_email: t.email || null })
+      .then(r => r?.data || null, () => null)
+  );
+
   const results = await Promise.all(promises);
   let updated = false;
+
   results.forEach((data, i) => {
-    if (data && myT[i].status !== data.status) {
-      myT[i].status = data.status; 
+    // track_ticket คืนค่ามาเป็น array
+    const item = Array.isArray(data) ? (data[0] || null) : data;
+    if (item && item.status && myT[i].status !== item.status) {
+      myT[i].status = item.status; 
       updated = true;
     }
   });
+
   if (updated) {
     localStorage.setItem('myT', JSON.stringify(myT));
-    if (tab === 'history') render();
+    if (window.tab === 'history' || window.tab === 'home') render();
   }
 };
 
@@ -178,13 +263,20 @@ if (document.readyState === 'loading') {
   setTimeout(initApp, 0);
 }
 
+// Background Auto Sync ทุกๆ 10 วินาที เพื่อให้แอดมิน ช่าง และผู้แจ้ง เห็นสถานะตรงกันแบบ Real-time
 setInterval(() => {
-  if (me && (me.role === 'admin' || me.role === 'tech') && !$('#dlg')?.open && !document.activeElement?.closest('form')) {
-    go();
+  if (me && (me.role === 'admin' || me.role === 'tech')) {
+    if (!$('#dlg')?.open && !document.activeElement?.closest('form')) {
+      go(true);
+    }
+  } else if (me && me.role === 'reporter') {
+    if (tab === 'history' || tab === 'home') {
+      loadHistoryData();
+    }
   }
-}, 30000);
+}, 10000);
 
-async function go() {
+async function go(silent = false) {
   try {
     if (me && (me.role === 'admin' || me.role === 'tech')) {
       const ticketsRes = await sb.from('tickets').select('*').order('created_at', { ascending: false }).limit(200);
@@ -192,17 +284,22 @@ async function go() {
         console.warn('tickets fetch warning:', ticketsRes.error);
       }
       T = ticketsRes.data || [];
+      window.T = T;
       const usageRes = await sb.from('usage').select('*').order('created_at', { ascending: false }).limit(200);
       U = usageRes.data || [];
+      window.U = U;
       if (me.role === 'admin') {
         const techsRes = await sb.from('profiles').select('id,name').eq('role', 'tech');
         techs = techsRes.data || [];
+        window.techs = techs;
       }
     }
   } catch (err) {
     console.error('go() error:', err);
   }
-  render();
+  if (!silent || !$('#dlg')?.open) {
+    render();
+  }
 }
 
 window.login = async function (e) {
@@ -219,6 +316,11 @@ window.register = async function (e) {
   const f = new FormData(e.target);
   const name = (f.get('name') || '').trim();
   const email = (f.get('email') || '').trim();
+  const tel = (f.get('tel') || '').trim();
+  const tel_internal = (f.get('tel_internal') || '').trim();
+  const org = (f.get('org') || '').trim();
+  const skill = (f.get('skill') || '').trim();
+
   // อ่านบทบาทจากฟอร์ม หรือตัวแปร regRole โดยตรง
   let role = (f.get('role') || regRole || 'reporter').trim();
   if (role !== 'tech') role = 'reporter';
@@ -235,7 +337,14 @@ window.register = async function (e) {
     email,
     password: pw,
     options: {
-      data: { name, role }
+      data: { 
+        name, 
+        role, 
+        tel, 
+        tel_internal, 
+        org, 
+        skill: role === 'tech' ? skill : null 
+      }
     }
   });
 
@@ -248,13 +357,17 @@ window.register = async function (e) {
     return toast('ลงทะเบียนไม่สำเร็จ: ' + error.message);
   }
 
-  // บันทึก/อัปเดตลงตาราง public.profiles ทันที
+  // บันทึก/อัปเดตลงตาราง public.profiles ทันทีให้ครบทุกฟิลด์
   if (data?.user?.id) {
     try {
       const { error: upsertErr } = await sb.from('profiles').upsert({
         id: data.user.id,
         name: name,
-        role: role
+        role: role,
+        tel: tel,
+        tel_internal: tel_internal,
+        org: org,
+        skill: role === 'tech' ? skill : null
       }, { onConflict: 'id' });
       if (upsertErr) {
         console.warn('Upsert profile error:', upsertErr);
@@ -327,7 +440,7 @@ function render() {
   const bottomNav = $('#mobile-bottom-nav');
 
   const titles = {
-    login: 'เข้าสู่ระบบ NUSP',
+    login: 'เข้าสู่ระบบ NU SEED',
     home: 'หน้าหลัก',
     report: 'แจ้งซ่อมใหม่',
     track: 'ติดตามสถานะงานแจ้งซ่อม',
@@ -345,7 +458,7 @@ function render() {
 
   if (!me || tab === 'login') {
     if (layout) layout.classList.add('login-mode');
-    if (topbarTitle) topbarTitle.textContent = 'ระบบแจ้งซ่อม NUSP';
+    if (topbarTitle) topbarTitle.textContent = 'ระบบแจ้งซ่อม NU SEED ';
     if (topbarRight) {
       topbarRight.innerHTML = `
         <span style="font-size:13px; color:var(--text-muted); font-weight:600;">อุทยานวิทยาศาสตร์ มหาวิทยาลัยนเรศวร</span>
@@ -360,7 +473,7 @@ function render() {
 
   // Logged-in Mode
   if (layout) layout.classList.remove('login-mode');
-  if (topbarTitle) topbarTitle.textContent = titles[tab] || 'ระบบแจ้งซ่อม NUSP';
+  if (topbarTitle) topbarTitle.textContent = titles[tab] || 'ระบบแจ้งซ่อม NU SEED ';
 
   // ปิด sidebar และ backdrop ทุกครั้งที่ render เพื่อป้องกันการค้างบังหน้าจอ
   const sbEl = $('#sidebar');
@@ -476,7 +589,7 @@ function render() {
   }
 }
 
-const url = p => sb.storage.from('photos').getPublicUrl(p).data.publicUrl;
+const url = p => (!p ? '' : (p.startsWith('http') || p.startsWith('blob:')) ? p : sb.storage.from('photos').getPublicUrl(p).data.publicUrl);
 const ph = (a, l) => a?.length ? `
   <div class="mut" style="margin-top:8px; font-size:12px; font-weight:600;">${l}</div>
   <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
@@ -498,106 +611,272 @@ window.zoom = function (p) {
   dlg.showModal();
 };
 
+window.toggleCardTimeline = function(id) {
+  const el = document.getElementById('steps_' + id);
+  if (el) {
+    if (el.style.display === 'none') {
+      el.style.display = 'block';
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+      el.style.display = 'none';
+    }
+  } else {
+    if (typeof quickTrack === 'function') quickTrack(id, '');
+  }
+};
+
 const card = (t, x = '') => {
-  let badgeClass = 'badge-pending';
-  let stName = ST[t.status] ? ST[t.status][0] : 'ไม่ระบุ';
-  let stColor = ST[t.status] ? ST[t.status][1] : 'var(--text-muted)';
-  
-  if (t.status === 'accepted') {
-    badgeClass = 'badge-pending';
-  } else if (t.status === 'doing') {
+  if (!t) return '';
+
+  // 1. Format Thai Date & Time (e.g. 4 พ.ย. 2569 เวลา 11:06 น.)
+  const d = t.created_at ? new Date(t.created_at) : null;
+  const dateStr = d && !isNaN(d.getTime()) 
+    ? d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) 
+    : (t.date || '-');
+  const timeStr = d && !isNaN(d.getTime()) 
+    ? d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.' 
+    : '';
+
+  // 2. Status Pill & Subtitle mapping matching mockup
+  let statusPillBg = '#ff4d4f';
+  let statusPillText = '❗ รอดำเนินการ';
+  let statusSubtext = 'กำลังรอเจ้าหน้าที่รับงาน';
+  let statusBoxBg = '#fff7f7';
+  let statusBoxBorder = '#ffd6d6';
+
+  if (t.status === 'doing') {
+    statusPillBg = '#f97316';
+    statusBoxBg = '#fffaf0';
+    statusBoxBorder = '#feebc8';
+    
     const lastHist = (t.history && t.history.length) ? t.history[t.history.length - 1] : null;
     const progTag = lastHist?.tag || (t.note?.match(/^\[(.*?)\]/)?.[1]) || '';
-
-    if (progTag.includes('ตรวจสอบ')) {
-      badgeClass = 'badge-inspecting';
-      stName = '🔍 ' + progTag;
-    } else if (progTag.includes('รออุปกรณ์') || progTag.includes('อะไหล่')) {
-      badgeClass = 'badge-waiting-parts';
-      stName = '⏳ ' + progTag;
-    } else if (progTag.includes('ติดปัญหา') || progTag.includes('ประสานงาน')) {
-      badgeClass = 'badge-issue';
-      stName = '⚠️ ' + progTag;
-    } else if (progTag.includes('ติดตั้ง')) {
-      badgeClass = 'badge-install';
-      stName = '🛠️ ' + progTag;
+    if (progTag) {
+      statusPillText = '⏳ ' + esc(progTag);
     } else {
-      badgeClass = 'badge-doing';
-      stName = 'กำลังดำเนินการ';
+      statusPillText = '⏳ กำลังดำเนินการ';
     }
+    statusSubtext = t.tech_name ? `ช่าง: ${esc(t.tech_name)}` : 'เจ้าหน้าที่กำลังเข้าดำเนินการ';
+  } else if (t.status === 'checking') {
+    statusPillBg = '#0284c7';
+    statusBoxBg = '#f0f9ff';
+    statusBoxBorder = '#bae6fd';
+    statusPillText = '✔️ ตรวจสอบงาน';
+    statusSubtext = t.tech_name ? `ช่าง: ${esc(t.tech_name)} (รอการตรวจสอบ)` : 'งานเสร็จแล้ว รอการตรวจสอบ/ตรวจรับ';
   } else if (t.status === 'done') {
+    statusPillBg = '#10b981';
+    statusBoxBg = '#f0fdf4';
+    statusBoxBorder = '#bbf7d0';
     const isInstall = t.done_type === 'ติดตั้ง/ต่อเติม' || (!t.done_type && t.cat === 'ติดตั้ง/ต่อเติม');
-    stName = isInstall ? '🛠️ ติดตั้งเสร็จสิ้น' : '🔧 ซ่อมเสร็จสิ้น';
-    badgeClass = 'badge-done';
+    statusPillText = isInstall ? '🛠️ ติดตั้งเสร็จสิ้น' : '✓ ซ่อมเสร็จสิ้น';
+    statusSubtext = t.done_at ? `เสร็จเมื่อ ${fmt(t.done_at)}` : 'ดำเนินการเรียบร้อยแล้ว';
+  } else if (t.status === 'closed') {
+    statusPillBg = '#475569';
+    statusBoxBg = '#f8fafc';
+    statusBoxBorder = '#cbd5e1';
+    statusPillText = '⭐ ปิดงานแล้ว';
+    statusSubtext = 'ปิดงานและบันทึกประวัติสมบูรณ์';
   } else if (t.status === 'deleted') {
-    badgeClass = 'badge-urgent';
+    statusPillBg = '#64748b';
+    statusBoxBg = '#f8fafc';
+    statusBoxBorder = '#e2e8f0';
+    statusPillText = '✕ ยกเลิกแล้ว';
+    statusSubtext = t.deleted_by ? `โดย ${esc(t.deleted_by)}` : 'ยกเลิกรายการแจ้งซ่อมแล้ว';
   }
 
+  // 3. Problem text & item summary
+  let problemText = (t.items || []).map(i => {
+    let s = `<b>${esc(i.item || '')}</b>`;
+    if (i.sym) s += ' – ' + esc(i.sym);
+    if (i.asset) s += ` [รหัสครุภัณฑ์: ${esc(i.asset)}]`;
+    return s;
+  }).join(' | ');
+
+  if (!problemText && (t.title || t.details)) {
+    problemText = `<b>${esc(t.title || '')}</b>${t.details ? ' – ' + esc(t.details) : ''}`;
+  }
+  if (!problemText) {
+    problemText = esc(t.note || '-');
+  }
+
+  // 4. Photos thumbnail box
+  const allPhotos = [...(t.photos || []), ...(t.done_photos || [])];
+  const photosHtml = allPhotos.length ? allPhotos.map(p => `
+    <img src="${url(p)}" class="ticket-photo-thumb" loading="lazy" onclick="zoom('${p}')" title="กดเพื่อดูรูปภาพขนาดใหญ่" alt="รูปประกอบ">
+  `).join('') : '<span style="color:#94a3b8; font-size:13.5px; font-weight:500;">ไม่มีรูปภาพแนบ</span>';
+
+  // 5. Separate wizard steps vs extra actions if passed in x
+  let isStepsInX = typeof x === 'string' && x.includes('steps-wizard');
+  let extraActionsHtml = isStepsInX ? '' : x;
+
   return `
-    <div class="content-card" style="margin-bottom:18px;">
-      <div class="card-header-row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <b style="font-size:18px; color:var(--text-main); font-weight:800;">${esc(t.id)}</b>
-          <button type="button" class="btn btn-outline btn-sm" onclick="copyNo('${t.id}', event)" title="คัดลอกเลขใบงาน" style="padding:6px 12px; font-size:14px; font-weight:700;">📋 คัดลอก</button>
+    <div class="ticket-mockup-card">
+      <!-- 1. Deep Navy Banner Header (Matches Mockup) -->
+      <div class="ticket-card-banner">
+        <div class="ticket-banner-left">
+          <div class="ticket-banner-logo-wrap">
+            <img src="nu_seed_logo.png" alt="NU SEED" class="ticket-banner-logo">
+            <div class="ticket-banner-brand-text">
+              <b>NU SEED</b>
+              <span>Naresuan University Science Park</span>
+            </div>
+          </div>
+          <div class="ticket-banner-divider"></div>
+          <div class="ticket-banner-wrench-circle">🔧</div>
+          <div class="ticket-banner-title">รายละเอียดการแจ้งซ่อม</div>
         </div>
-        <span class="badge ${badgeClass}" style="font-size:14.5px; padding:6px 14px;"><span class="badge-dot"></span> ${stName}</span>
-      </div>
 
-      <div style="font-size:16.5px; margin-bottom:8px; font-weight:700; color:var(--text-main);">
-        อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')} ห้อง/บริเวณ ${esc(t.room || '-')}
-        ${t.urgent ? ' <span class="badge badge-urgent" style="font-size:13px;">ด่วน</span>' : ''}
-      </div>
-
-      <div class="mut" style="font-size:15px; margin-bottom:6px; font-weight:600; color:var(--primary);">
-        หมวดหมู่: ${esc((t.types || []).join(', ') || t.cat || '')}
-      </div>
-
-      <div style="font-size:15.5px; color:var(--text-main); margin-bottom:8px; line-height:1.5;">
-        ${(t.items || []).map(i => `<b>${esc(i.item)}</b>${i.sym ? ' – ' + esc(i.sym) : ''}${i.asset ? ' [รหัสครุภัณฑ์: ' + esc(i.asset) + ']' : ''}`).join(' | ')}
-      </div>
-
-      <div class="mut" style="font-size:14.5px; margin-bottom:6px;">
-        ${t.name ? `แจ้งโดย: <b>${esc(t.name)}</b> ${esc(t.tel || '')} ${t.ext ? 'ภายใน ' + esc(t.ext) : ''} · ` : ''}
-        วันที่แจ้ง: ${fmt(t.created_at)}
-      </div>
-
-      <div class="mut" style="font-size:14.5px; margin-bottom:6px;">
-        ช่างผู้รับผิดชอบ: <b style="color:var(--text-main);">${t.tech_name ? esc(t.tech_name) : 'ช่างส่วนกลาง (รอรับงาน)'}</b>
-      </div>
-
-      ${t.note ? `
-        <div style="font-size:15px; padding:10px 14px; border-radius:8px; margin:10px 0; background:${t.blocked ? 'var(--danger-bg)' : 'var(--bg-subtle)'}; color:${t.blocked ? 'var(--danger)' : 'var(--text-main)'}; font-weight:${t.blocked ? '700' : '500'}; line-height:1.5;">
-          ${t.blocked ? '⚠️ ติดปัญหา: ' : '📝 หมายเหตุ: '}${esc(t.note)}
+        <div>
+          <button type="button" class="ticket-banner-home-btn" onclick="setTab('home')">
+            🏠 หน้าหลัก
+          </button>
         </div>
-      ` : ''}
+      </div>
 
-      ${ph(t.photos, 'รูปประกอบการแจ้ง')}
-      ${ph(t.done_photos, 'รูปหลังดำเนินการ')}
+      <!-- 2. Card Content Body -->
+      <div class="ticket-mockup-body">
+        <!-- 3-Box Top Stats Row -->
+        <div class="ticket-stats-grid">
+          <!-- Box 1: Ticket ID -->
+          <div class="ticket-stat-box ticket-stat-box-id" onclick="copyNo('${t.id}', event)" title="คลิกเพื่อคัดลอกเลขใบแจ้งซ่อม">
+            <div class="ticket-stat-icon-wrap">📄</div>
+            <div class="ticket-stat-texts">
+              <div class="ticket-stat-label">เลขที่ใบแจ้งซ่อม</div>
+              <div class="ticket-stat-val-id">${esc(t.id)}</div>
+            </div>
+          </div>
 
-      ${t.status === 'deleted' ? `
-        <div style="font-size:14px; color:var(--danger); margin-top:8px;">
-          ยกเลิก/ลบโดย ${t.deleted_by ? ' (' + esc(t.deleted_by) + ')' : ''} · ${fmt(t.deleted_at)}
+          <!-- Box 2: Date & Time -->
+          <div class="ticket-stat-box ticket-stat-box-date">
+            <div class="ticket-stat-icon-wrap" style="color:#ea580c;">📅</div>
+            <div class="ticket-stat-texts">
+              <div class="ticket-stat-label" style="color:#64748b;">วันที่แจ้งซ่อม</div>
+              <div class="ticket-stat-val-date">${esc(dateStr)}</div>
+              ${timeStr ? `<div class="ticket-stat-val-time">เวลา ${esc(timeStr)}</div>` : ''}
+            </div>
+          </div>
+
+          <!-- Box 3: Status -->
+          <div class="ticket-stat-box ticket-stat-box-status" style="background:${statusBoxBg}; border:1.5px solid ${statusBoxBorder};">
+            <div class="ticket-status-pill" style="background:${statusPillBg}; color:#ffffff;">
+              ${statusPillText}
+            </div>
+            <div class="ticket-status-subtext">${statusSubtext}</div>
+          </div>
         </div>
-      ` : ''}
 
-      ${t.status === 'done' ? `
-        <div class="mut" style="font-size:14px; margin-top:10px; border-top:1px dashed var(--border); padding-top:8px;">
-          ${t.cannot ? '<b style="color:var(--danger)">ไม่สามารถดำเนินการได้</b> · ' : ''}
-          ${t.budget ? 'งบประมาณ ' + t.budget + ' บาท · ' : ''}
-          ${t.done_type ? `[${t.done_type === 'ติดตั้ง/ต่อเติม' ? 'ติดตั้งเสร็จ' : 'ซ่อมเสร็จ'}] ` : ''}
-          เสร็จสิ้นเมื่อ ${fmt(t.done_at)}
+        <!-- Middle 2x2 Info Grid -->
+        <div class="ticket-mid-grid">
+          <!-- Item 1: Location -->
+          <div class="ticket-mid-item">
+            <div class="ticket-circle-icon">🏢</div>
+            <div class="ticket-mid-content">
+              <div class="ticket-mid-label">อาคาร / สถานที่</div>
+              <div class="ticket-mid-val">
+                อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')} ห้อง/บริเวณ ${esc(t.room || '-')}
+                ${t.urgent ? '<span class="badge badge-urgent" style="font-size:12px; margin-left:6px;">ด่วน</span>' : ''}
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 2: Category -->
+          <div class="ticket-mid-item">
+            <div class="ticket-circle-icon">⚙️</div>
+            <div class="ticket-mid-content">
+              <div class="ticket-mid-label">ประเภทงาน</div>
+              <div class="ticket-mid-val">
+                ${esc((t.types || []).join(', ') || t.sub_type || t.cat || 'ทั่วไป')}
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 3: Problem Details -->
+          <div class="ticket-mid-item">
+            <div class="ticket-circle-icon">ℹ️</div>
+            <div class="ticket-mid-content">
+              <div class="ticket-mid-label">รายละเอียดปัญหา</div>
+              <div class="ticket-mid-val" style="font-size:15px; font-weight:700; line-height:1.5;">
+                ${problemText}
+                ${t.note ? `
+                  <div style="font-size:13.5px; margin-top:8px; padding:6px 10px; border-radius:6px; background:${t.blocked ? '#fee2e2' : '#f1f5f9'}; color:${t.blocked ? '#b91c1c' : '#475569'}; font-weight:700;">
+                    ${t.blocked ? '⚠️ ติดปัญหา: ' : '📝 หมายเหตุ: '}${esc(t.note)}
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 4: Attached Photo -->
+          <div class="ticket-photo-section">
+            <div class="ticket-photo-header">
+              <span>📎</span>
+              <span>รูปภาพประกอบ</span>
+            </div>
+            <div class="ticket-photo-container">
+              ${photosHtml}
+            </div>
+          </div>
         </div>
-      ` : ''}
 
-      ${x}
+        <!-- Reporter Bottom Pill Bar (Matches Mockup) -->
+        <div class="ticket-reporter-bar">
+          <div class="ticket-reporter-col">
+            <span style="color:#ea580c; font-size:18px;">👤</span>
+            <span class="ticket-reporter-label">ผู้แจ้งซ่อม:</span>
+            <span class="ticket-reporter-name">${esc(t.name || 'ไม่ระบุ')}</span>
+          </div>
+          <div class="ticket-reporter-divider"></div>
+          <div class="ticket-reporter-col">
+            <span style="color:#ea580c; font-size:18px;">📞</span>
+            <span class="ticket-reporter-label">เบอร์โทรศัพท์:</span>
+            <span class="ticket-reporter-name">${esc(t.tel || '-')}</span>
+          </div>
+        </div>
+
+        <!-- Action Buttons Bar -->
+        <div class="ticket-actions-bar">
+          ${tab === 'mine' ? `
+            <button type="button" class="ticket-btn-primary" onclick="openAct('${t.id}')">
+              <span>📝</span> อัปเดตสถานะ
+            </button>
+            <button type="button" class="ticket-btn-mat" onclick="openMat('${t.id}')">
+              <span>📦</span> เบิกวัสดุ
+            </button>
+          ` : tab === 'tech_done' ? `
+            <button type="button" class="ticket-btn-mat" onclick="toggleCardTimeline('${t.id}')">
+              <span>📜</span> ดูประวัติขั้นตอน
+            </button>
+            <button type="button" class="ticket-btn-mat" onclick="openMat('${t.id}')">
+              <span>📦</span> รายการเบิกวัสดุ
+            </button>
+          ` : tab === 'all' ? `
+            ${extraActionsHtml}
+          ` : `
+            <button type="button" class="ticket-btn-primary" onclick="toggleCardTimeline('${t.id}')">
+              <span>🔍</span> ติดตามสถานะ &gt;
+            </button>
+            <button type="button" class="ticket-btn-mat" onclick="openMat('${t.id}')">
+              <span>📦</span> เบิกวัสดุ &gt;
+            </button>
+            ${extraActionsHtml}
+          `}
+        </div>
+
+        <!-- Collapsible Steps Wizard Timeline -->
+        <div id="steps_${t.id}" class="card-timeline-container" style="display:${isStepsInX || t.status === 'doing' ? 'block' : 'none'}; margin-top:16px; padding-top:12px; border-top:1px dashed #e2e8f0;">
+          ${steps(t)}
+        </div>
+      </div>
     </div>
   `;
 };
 
 function steps(t) {
   if (t.status === 'deleted') return '';
-  const o = ['accepted', 'doing', 'done'], i = o.indexOf(t.status), h = {};
-  (t.history || []).forEach(x => h[x.s] = x.at);
+  const o = ['accepted', 'doing', 'checking', 'done', 'closed'];
+  const i = o.indexOf(t.status);
+  const h = {};
+  (t.history || []).forEach(x => { if (x.s) h[x.s] = x.at; });
   const doneLabel = (t.done_type === 'ติดตั้ง/ต่อเติม' || (!t.done_type && t.cat === 'ติดตั้ง/ต่อเติม')) ? 'ติดตั้งเสร็จสิ้น' : 'ซ่อมเสร็จสิ้น';
   
   const lastHist = (t.history && t.history.length) ? t.history[t.history.length - 1] : null;
@@ -613,9 +892,9 @@ function steps(t) {
         return `
           <div class="step-item ${j <= i ? 'active' : ''}">
             <div class="step-circle" style="width:34px; height:34px; font-size:15px;">${j <= i ? '✓' : j + 1}</div>
-            <div class="step-label" style="font-size:14px;">
+            <div class="step-label" style="font-size:13.5px;">
               ${label}
-              ${h[s] ? `<br><small style="font-size:12px; color:var(--text-light); font-weight:normal;">${fmt(h[s])}</small>` : ''}
+              ${h[s] ? `<br><small style="font-size:11.5px; color:var(--text-light); font-weight:normal;">${fmt(h[s])}</small>` : ''}
             </div>
           </div>
         `;
