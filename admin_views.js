@@ -320,25 +320,27 @@ function vTechsManage() {
     <div class="admin-techs-grid">
       <!-- Left (2/3): Search, Filter & Technicians Table / Cards -->
       <div class="content-card">
-        <!-- Filter Tabs & Actions Bar (ในกรอบเดียวกัน: ซ้ายมีแท็บ ขวามีปุ่มเพิ่มบัญชีใหม่) -->
+        <!-- Filter Tabs & Actions Bar (ในกรอบเดียวกัน: ซ้ายมีแท็บเลื่อนแนวนอน ขวามีปุ่มเพิ่มบัญชีใหม่) -->
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
-          <div class="filter-pills" style="margin:0;">
-            <button class="filter-pill ${adminStaffRoleFilter === 'all' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('all')">
-              ทั้งหมด (${staffList.length})
-            </button>
-            <button class="filter-pill ${adminStaffRoleFilter === 'reporter' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('reporter')">
-              👤 ผู้แจ้งซ่อม (${allReporters.length})
-            </button>
-            <button class="filter-pill ${adminStaffRoleFilter === 'tech' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('tech')">
-              👨‍🔧 ช่างซ่อมบำรุง (${allTechs.length})
-            </button>
-            <button class="filter-pill ${adminStaffRoleFilter === 'admin' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('admin')">
-              👑 ผู้ดูแลระบบ (${allAdmins.length})
-            </button>
+          <div style="flex:1; min-width:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;">
+            <div class="filter-pills" style="margin:0; display:flex; gap:8px; flex-wrap:nowrap; width:max-content;">
+              <button class="filter-pill ${adminStaffRoleFilter === 'all' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('all')">
+                ทั้งหมด (${staffList.length})
+              </button>
+              <button class="filter-pill ${adminStaffRoleFilter === 'reporter' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('reporter')">
+                👤 ผู้แจ้งซ่อม (${allReporters.length})
+              </button>
+              <button class="filter-pill ${adminStaffRoleFilter === 'tech' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('tech')">
+                👨‍🔧 ช่างซ่อมบำรุง (${allTechs.length})
+              </button>
+              <button class="filter-pill ${adminStaffRoleFilter === 'admin' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('admin')">
+                👑 ผู้ดูแลระบบ (${allAdmins.length})
+              </button>
+            </div>
           </div>
 
           <!-- มุมขวา ในกรอบเดียวกับที่มี ผู้ดูแลระบบ ช่างซ่อมบำรุง -->
-          <div style="display:flex; align-items:center; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
             <button class="btn btn-primary" style="white-space:nowrap; padding:8px 16px; font-weight:800; font-size:14.5px; border-radius:8px;" onclick="openAddStaffModal()">
               + เพิ่มบัญชีใหม่
             </button>
@@ -426,39 +428,40 @@ function vTechsManage() {
         </div>
 
         <!-- Mobile View Cards -->
-        <div class="mobile-only-cards" style="display:none; flex-direction:column; gap:12px; margin-top:14px;">
+        <div class="mobile-only-cards" style="display:none; flex-direction:column; gap:12px; margin-top:14px; padding-bottom:60px;">
           ${filtered.length ? filtered.map(t => {
             const isAdmin = t.role === 'admin';
             const isReporter = t.role === 'reporter' || (!t.role && t.role !== 'tech' && t.role !== 'admin');
             const isTech = t.role === 'tech';
 
             return `
-              <div style="background:var(--bg-subtle); border:1.5px solid var(--border); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <b style="font-size:16px; color:#0b2545;">${esc(t.name)}</b>
-                  <span class="badge" style="font-weight:700; font-size:12px; ${isAdmin ? 'background:#fef3c7; color:#b45309;' : isReporter ? 'background:#f1f5f9; color:#475569;' : 'background:#e0f2fe; color:#0369a1;'}">
-                    ${isAdmin ? '👑 แอดมิน' : isReporter ? '👤 ผู้แจ้ง' : '👨‍🔧 ช่าง'}
+              <div style="background:#ffffff; border:1.5px solid #e2e8f0; border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:0 1px 4px rgba(0,0,0,0.03);">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:8px;">
+                  <b style="font-size:16.5px; color:#0b2545;">${esc(t.name)}</b>
+                  <span class="badge" style="font-weight:700; font-size:12px; ${isAdmin ? 'background:#fef3c7; color:#b45309; border:1px solid #fde68a;' : isReporter ? 'background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;' : 'background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;'}">
+                    ${isAdmin ? '👑 ผู้ดูแลระบบ' : isReporter ? '👤 ผู้แจ้งซ่อม' : '👨‍🔧 ช่างเทคนิค'}
                   </span>
                 </div>
 
-                <div style="display:flex; flex-direction:column; gap:3px; font-size:14px; color:#475569;">
-                  <div>📧 อีเมล: <span style="font-family:monospace; font-weight:700;">${esc(t.email || '-')}</span></div>
-                  <div>💼 ตำแหน่ง: <b>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
-                  ${t.org ? `<div>🏢 หน่วยงาน: <span>${esc(t.org)}</span></div>` : ''}
-                  ${isTech && t.skill ? `<div>🛠️ เชี่ยวชาญ: <span>${esc(t.skill)}</span></div>` : ''}
+                <div style="display:flex; flex-direction:column; gap:4px; font-size:14px; color:#475569;">
+                  <div>📧 <b>อีเมล:</b> <span style="font-family:monospace; color:#0f172a;">${esc(t.email || '-')}</span></div>
+                  <div>📞 <b>เบอร์โทร:</b> <span style="color:#0284c7; font-weight:700;">${esc(t.tel || '-')}</span></div>
+                  <div>💼 <b>ตำแหน่ง:</b> <span>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</span></div>
+                  <div>🏢 <b>หน่วยงาน:</b> <span>${esc(t.org || '-')}</span></div>
+                  ${isTech && t.skill ? `<div>🛠️ <b>เชี่ยวชาญ:</b> <span>${esc(t.skill)}</span></div>` : ''}
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed var(--border); padding-top:10px; margin-top:4px;">
-                  <span style="font-size:14px; font-weight:700;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #e2e8f0; padding-top:10px; margin-top:2px;">
+                  <span style="font-size:13.5px; font-weight:700;">
                     ${isTech ? `📋 รับแล้ว: <b style="color:var(--primary);">${t.jobs || 0}</b> งาน` : ''}
                   </span>
-                  <div style="display:flex; gap:6px;">
+                  <div style="display:flex; gap:8px;">
                     ${isTech ? `
-                      <button class="btn btn-primary btn-sm" onclick="openAssignModal('${t.id}')">
+                      <button class="btn btn-primary btn-sm" style="font-size:13px; padding:6px 12px; font-weight:700;" onclick="openAssignModal('${t.id}')">
                         มอบหมาย
                       </button>
                     ` : ''}
-                    <button class="btn btn-outline btn-sm" style="font-size:12.5px; padding:4px 10px; font-weight:700;" onclick="openEditStaffModal('${t.id}')">
+                    <button class="btn btn-outline btn-sm" style="font-size:13px; padding:6px 14px; font-weight:700; border-radius:8px; border-color:#0b2545; color:#0b2545; display:inline-flex; align-items:center; gap:4px;" onclick="openEditStaffModal('${t.id}')">
                       ✏️ แก้ไขบัญชี
                     </button>
                   </div>
@@ -794,13 +797,13 @@ window.openEditStaffModal = function(id) {
 
         <!-- ปุ่ม Action ด้านล่าง: ซ้ายเป็นปุ่มลบบัญชี ขวาเป็นปุ่มยกเลิกและบันทึก -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1.5px solid #e2e8f0; padding-top:14px; flex-wrap:wrap; gap:10px;">
-          <button type="button" class="btn" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-weight:700; padding:8px 14px; border-radius:8px; font-size:13.5px;" onclick="confirmDeleteStaff('${esc(u.id)}', '${esc(u.name || '')}', '${esc(role)}')">
+          <button type="button" class="btn" style="background:#dc2626; color:#ffffff; font-weight:700; padding:8px 14px; border-radius:8px; font-size:13.5px; display:inline-flex; align-items:center; gap:6px;" onclick="confirmDeleteStaff('${esc(u.id)}', '${esc(u.name || '')}', '${esc(role)}')">
             🗑️ ลบบัญชีผู้ใช้นี้
           </button>
           
           <div style="display:flex; gap:8px;">
             <button type="button" class="btn btn-outline" onclick="document.querySelector('#dlg').close()" style="min-width:90px;">ยกเลิก</button>
-            <button type="submit" class="btn btn-primary" style="font-weight:800; min-width:130px;">💾 บันทึกการแก้ไข</button>
+            <button type="submit" class="btn btn-primary" style="font-weight:800; min-width:140px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">✏️ บันทึกการแก้ไข</button>
           </div>
         </div>
       </form>
@@ -886,7 +889,7 @@ window.confirmDeleteStaff = function(id, name, role) {
         <span style="color:#ef4444; font-size:13.5px; font-weight:700;">* การลบจะทำให้บัญชีนี้ไม่สามารถเข้าสู่ระบบได้อีกต่อไป กรุณากดยืนยันการลบอีกครั้ง</span>
       </p>
       <div style="display:flex; justify-content:center; gap:12px;">
-        <button type="button" class="btn btn-outline" style="min-width:110px;" onclick="document.querySelector('#dlg').close()">ยกเลิก</button>
+        <button type="button" class="btn btn-outline" style="min-width:110px;" onclick="openEditStaffModal('${esc(id)}')">ยกเลิก</button>
         <button type="button" class="btn" style="background:#dc2626; color:#ffffff; font-weight:800; min-width:140px;" onclick="executeDeleteStaff('${esc(id)}')">🗑️ ยืนยันการลบ</button>
       </div>
     </div>
@@ -1205,9 +1208,12 @@ window.openAdminTicketModal = function(id) {
   const descText = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || t.items?.[0]?.sym || '-');
   const cleanBld = (t.bld || '-').replace(/^อาคาร\s*/, '');
   const assetNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
-  const reporterName = t.name || t.reporter_name || '-';
-  const reporterTel = t.tel || '-';
-  const reporterEmail = t.email || '-';
+  const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : {
+    name: t.name || t.reporter_name || '-',
+    org: t.org || '-',
+    tel: t.tel || '-',
+    email: t.email || '-'
+  };
   const dateStr = t.created_at ? fmt(t.created_at) : (t.date || '-');
   const photos = t.photos || [];
   const donePhotos = t.done_photos || [];
@@ -1269,9 +1275,10 @@ window.openAdminTicketModal = function(id) {
             <div>
               <b>สถานที่ :</b> <b>อาคาร</b> ${esc(cleanBld)}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} <b>ชั้น</b> ${esc(t.flr || '-')} <b>ห้อง/บริเวณ</b> ${esc(t.room || '-')}
             </div>
-            <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(reporterName)}</span></div>
-            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(reporterTel)}</span></div>
-            <div><b>อีเมล :</b> <span>${esc(reporterEmail)}</span></div>
+            <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span></div>
+            <div><b>หน่วยงาน / สังกัด :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span></div>
+            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span></div>
+            <div><b>อีเมล :</b> <span style="color:#334155;">${esc(rep.email)}</span></div>
           </div>
 
           <!-- รายละเอียดปัญหา -->

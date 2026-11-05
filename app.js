@@ -469,7 +469,62 @@ window.signOut = function () {
   }
 };
 
+window.getReporterInfo = function(t) {
+  if (!t) return { name: '-', org: '-', tel: '-', email: '-' };
+
+  const staff = (typeof allStaff !== 'undefined' && allStaff.length) ? allStaff : ((typeof techs !== 'undefined') ? techs : []);
+  let p = null;
+
+  // 1. หาจาก user_id ก่อน
+  if (t.user_id) {
+    p = staff.find(x => String(x.id) === String(t.user_id));
+  }
+
+  // 2. หาจาก name / reporter_name
+  const rawName = (t.name || t.reporter_name || '').trim();
+  const cleanName = rawName.replace(/\s*\(.*?\)\s*/g, '').trim();
+
+  if (!p && rawName) {
+    p = staff.find(x => x.name === rawName || x.name === cleanName || (cleanName && x.name && x.name.toLowerCase() === cleanName.toLowerCase()));
+  }
+
+  // 3. หาจาก email ถ้าไม่ใช่ default user@nusp.or.th
+  if (!p && t.email && t.email !== 'user@nusp.or.th' && t.email !== '-' && t.email !== 'null') {
+    p = staff.find(x => x.email && x.email.toLowerCase() === t.email.toLowerCase());
+  }
+
+  // สกัดหน่วยงานจากชื่อ เช่น "Kla (NU SEED)"
+  let extractedOrg = '';
+  const matchOrg = rawName.match(/\((.*?)\)/);
+  if (matchOrg) extractedOrg = matchOrg[1].trim();
+
+  // ดึงชื่อ
+  const displayName = cleanName || p?.name || rawName || '-';
+
+  // ดึงหน่วยงาน
+  const org = (t.org && t.org !== '-' && t.org !== 'null') ? t.org : (p?.org || extractedOrg || '-');
+
+  // ดึงเบอร์โทรศัพท์ (ถ้าในตั๋วไม่มีหรือเป็น - ให้เอาจากโปรไฟล์)
+  let tel = (t.tel && t.tel !== '-' && t.tel !== 'null') ? t.tel : (p?.tel || '-');
+
+  // ดึงอีเมล (ถ้าในตั๋วเป็น default หรือว่าง ให้เอาจากโปรไฟล์)
+  let email = (t.email && t.email !== '-' && t.email !== 'user@nusp.or.th' && t.email !== 'null')
+    ? t.email
+    : (p?.email || (t.email && t.email !== 'null' ? t.email : '-'));
+
+  return {
+    name: displayName,
+    org: org,
+    tel: tel,
+    email: email
+  };
+};
+
 function render() {
+  const dlg = document.querySelector('dialog');
+  if (!dlg || !dlg.open) {
+    document.body.classList.remove('dialog-open');
+  }
   const layout = $('#app-layout');
   const sidebarMenu = $('#sidebar-menu');
   const topbarTitle = $('#page-title');

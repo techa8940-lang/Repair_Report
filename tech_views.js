@@ -185,9 +185,12 @@ function vTaskDetail() {
   const sym = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.items?.[0]?.sym || t.desc || '-');
   const cleanBld = (t.bld || '-').replace(/^อาคาร\s*/, '');
   const assetNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
-  const reporterName = t.name || t.reporter_name || '-';
-  const reporterTel = t.tel || '-';
-  const reporterEmail = t.email || '-';
+  const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : {
+    name: t.name || t.reporter_name || '-',
+    org: t.org || '-',
+    tel: t.tel || '-',
+    email: t.email || '-'
+  };
   const dateStr = fmt(t.created_at) || (t.date || '-');
 
   const photos = t.photos || [];
@@ -247,9 +250,10 @@ function vTaskDetail() {
             <div>
               <b>สถานที่ :</b> <b>อาคาร</b> ${esc(cleanBld)}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} <b>ชั้น</b> ${esc(t.flr || '-')} <b>ห้อง/บริเวณ</b> ${esc(t.room || '-')}
             </div>
-            <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(reporterName)}</span></div>
-            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(reporterTel)}</span></div>
-            <div><b>อีเมล :</b> <span>${esc(reporterEmail)}</span></div>
+            <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span></div>
+            <div><b>หน่วยงาน / สังกัด :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span></div>
+            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span></div>
+            <div><b>อีเมล :</b> <span>${esc(rep.email)}</span></div>
             <div><b>วันที่แจ้งซ่อม :</b> <span style="color:var(--text-muted);">${esc(dateStr)}</span></div>
 
             <div style="margin-top:4px; background:var(--bg-subtle); padding:14px; border-radius:var(--radius-md); border:1px solid var(--border);">
@@ -584,23 +588,29 @@ function vTechDone() {
                     </div>
 
                     <!-- รายละเอียดข้อมูลผู้แจ้ง -->
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; font-size:14.5px; line-height:1.6; margin-bottom:14px;">
-                      <div><b>👤 ชื่อผู้แจ้งซ่อม:</b> <span style="font-weight:700; color:#0b2545;">${esc(t.name || t.reporter_name || '-')}</span></div>
-                      <div><b>📞 เบอร์โทรศัพท์:</b> <span style="font-weight:700; color:#0284c7;">${esc(t.tel || '-')}</span></div>
-                      <div><b>✉️ อีเมลผู้แจ้ง:</b> ${esc(t.email || '-')}</div>
-                      <div><b>📅 วันที่แจ้งซ่อม:</b> ${esc(reqDateStr)}</div>
-                      <div><b>🏢 อาคาร / สถานที่:</b> อาคาร ${esc(t.bld || '-')}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} ชั้น ${esc(t.flr || '-')} (ห้อง/บริเวณ ${esc(t.room || '-')})</div>
-                      <div><b>⚙️ ประเภทงาน:</b> ${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</div>
-                      <div><b>🏷️ ชนิดอุปกรณ์:</b> <span style="font-weight:700; color:#0b2545;">${esc(equipType)}</span></div>
-                      <div>
-                        <b>🏷️ หมายเลขครุภัณฑ์:</b> 
-                        ${assetNo ? `
-                          <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">${esc(assetNo)}</b>
-                        ` : `
-                          <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
-                        `}
-                      </div>
-                    </div>
+                    ${(() => {
+                      const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : { name: t.name || '-', org: t.org || '-', tel: t.tel || '-', email: t.email || '-' };
+                      return `
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; font-size:14.5px; line-height:1.6; margin-bottom:14px;">
+                          <div><b>👤 ชื่อผู้แจ้งซ่อม:</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span></div>
+                          <div><b>🏢 หน่วยงาน / สังกัด:</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span></div>
+                          <div><b>📞 เบอร์โทรศัพท์:</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span></div>
+                          <div><b>✉️ อีเมลผู้แจ้ง:</b> ${esc(rep.email)}</div>
+                          <div><b>📅 วันที่แจ้งซ่อม:</b> ${esc(reqDateStr)}</div>
+                          <div><b>🏢 อาคาร / สถานที่:</b> อาคาร ${esc(t.bld || '-')}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} ชั้น ${esc(t.flr || '-')} (ห้อง/บริเวณ ${esc(t.room || '-')})</div>
+                          <div><b>⚙️ ประเภทงาน:</b> ${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</div>
+                          <div><b>🏷️ ชนิดอุปกรณ์:</b> <span style="font-weight:700; color:#0b2545;">${esc(equipType)}</span></div>
+                          <div>
+                            <b>🏷️ หมายเลขครุภัณฑ์:</b> 
+                            ${assetNo ? `
+                              <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">${esc(assetNo)}</b>
+                            ` : `
+                              <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
+                            `}
+                          </div>
+                        </div>
+                      `;
+                    })()}
 
                     <!-- รายละเอียดอาการ/ปัญหาที่ชำรุด -->
                     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; margin-bottom:14px;">

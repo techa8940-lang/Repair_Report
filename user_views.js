@@ -595,12 +595,17 @@ window.confirmSubmitReport = async function(e) {
       ? (newReportDraft.bld_other ? 'อาคาร: ' + newReportDraft.bld_other : 'อื่นๆ')
       : (newReportDraft.bld || 'อาคาร A');
 
+    const userTel = telCombined || me?.tel || '';
+    const userOrg = newReportDraft.org || me?.org || '';
+    const userEmail = (me?.email || 'user@nusp.or.th').toLowerCase();
+
     const payload = {
       id: no,
       user_id: me?.id && isUUID(me.id) ? me.id : null,
-      name: me?.name ? (newReportDraft.org ? `${me.name} (${newReportDraft.org})` : me.name) : 'ผู้แจ้งทั่วไป',
-      email: (me?.email || 'user@nusp.or.th').toLowerCase(),
-      tel: telCombined,
+      name: me?.name ? (userOrg ? `${me.name} (${userOrg})` : me.name) : 'ผู้แจ้งทั่วไป',
+      email: userEmail,
+      tel: userTel,
+      org: userOrg,
       cat: cat,
       bld: chosenBld,
       bld_other: newReportDraft.bld === 'อื่นๆ' ? newReportDraft.bld_other : null,
@@ -1188,6 +1193,12 @@ window.openReporterTicketModal = function(t) {
   const descText = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || '-');
   const assetNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
   const equipType = (typeof getTicketTitle === 'function' ? getTicketTitle(t) : (t.items?.[0]?.item || t.title || t.type || 'อุปกรณ์ทั่วไป'));
+  const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : {
+    name: t.name || t.reporter_name || '-',
+    org: t.org || '-',
+    tel: t.tel || '-',
+    email: t.email || '-'
+  };
 
   dlg.className = 'act-dialog-wide';
   dlg.innerHTML = `
@@ -1244,6 +1255,18 @@ window.openReporterTicketModal = function(t) {
           <div style="display:flex; flex-direction:column; gap:10px; font-size:15px; line-height:1.6;">
             <div>
               <b>หัวข้อการแจ้ง:</b> <span style="font-weight:700; color:#0b2545;">${esc(titleText)}</span>
+            </div>
+            <div>
+              <b>ผู้แจ้งซ่อม:</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span>
+            </div>
+            <div>
+              <b>หน่วยงาน / สังกัด:</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span>
+            </div>
+            <div>
+              <b>เบอร์โทรศัพท์:</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span>
+            </div>
+            <div>
+              <b>อีเมล:</b> <span style="color:#334155;">${esc(rep.email)}</span>
             </div>
             <div>
               <b>สถานที่:</b> อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')} (ห้อง/บริเวณ ${esc(t.room || '-')})
