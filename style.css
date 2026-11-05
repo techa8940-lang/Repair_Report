@@ -2088,6 +2088,21 @@ dialog#dlg.act-dialog-wide {
   -webkit-overflow-scrolling: touch;
 }
 
+dialog#dlg.admin-ticket-dialog-wide {
+  width: min(960px, 94vw) !important;
+  max-width: 960px !important;
+  max-height: 90vh !important;
+  margin: auto !important;
+  padding: 0 !important;
+  border-radius: 20px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 25px 50px -12px rgba(11, 37, 69, 0.25) !important;
+  -webkit-overflow-scrolling: touch;
+}
+
 .act-modal-container {
   display: flex;
   flex-direction: column;

@@ -64,7 +64,8 @@ window.REP = REP;
 window.INS = INS;
 window.MATS = MATS;
 
-var me = null, uid = null, tab = 'login', T = [], U = [], techs = [], fil = 'accepted', fT = '', found = undefined, lastNo = '', armed = '', lastTrackEmail = '';
+var me = null, uid = null, tab = 'login', T = [], U = [], techs = [], allStaff = [], fil = 'accepted', fT = '', found = undefined, lastNo = '', armed = '', lastTrackEmail = '';
+window.allStaff = allStaff;
 var statM = new Date().toISOString().slice(0, 7); 
 var hFil = 'all';
 var adminView = 'admin'; // 'admin' | 'tech' | 'reporter'
@@ -324,8 +325,10 @@ async function go(silent = false) {
       U = usageRes.data || [];
       window.U = U;
       if (me.role === 'admin') {
-        const techsRes = await sb.from('profiles').select('id,name').eq('role', 'tech');
-        techs = techsRes.data || [];
+        const staffRes = await sb.from('profiles').select('*');
+        allStaff = staffRes.data || [];
+        techs = allStaff.filter(u => u.role === 'tech');
+        window.allStaff = allStaff;
         window.techs = techs;
       }
     }
@@ -488,7 +491,7 @@ function render() {
     dashboard: 'Dashboard ภาพรวม',
     all: 'สรุปงานซ่อมทั้งหมด',
     asset_check: 'ตรวจสอบประวัติครุภัณฑ์',
-    techs_manage: 'จัดการช่างและมอบหมายงาน',
+    techs_manage: 'จัดการบัญชีผู้ใช้งาน',
     stock: 'วัสดุและอุปกรณ์ที่เบิก'
   };
 
@@ -540,7 +543,7 @@ function render() {
       ['dashboard', '📊', 'Dashboard'],
       ['all', '📋', 'สรุปงานซ่อม'],
       ['asset_check', '🏷️', 'ประวัติครุภัณฑ์'],
-      ['techs_manage', '👥', 'จัดการช่าง'],
+      ['techs_manage', '👥', 'จัดการบัญชี'],
       ['stock', '📦', 'วัสดุที่เบิก'],
       ['profile', '👤', 'ข้อมูลส่วนตัว']
     ]

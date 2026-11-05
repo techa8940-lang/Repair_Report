@@ -183,15 +183,17 @@ function vTaskDetail() {
 
   const title = (typeof getTicketTitle === 'function') ? getTicketTitle(t) : (t.title || t.items?.[0]?.item || '-');
   const sym = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.items?.[0]?.sym || t.desc || '-');
-  const loc = `อาคาร ${t.bld || ''} ชั้น ${t.flr || ''}${t.room ? ' ' + t.room : ''}`;
-  const reporterName = t.name || '-';
+  const cleanBld = (t.bld || '-').replace(/^อาคาร\s*/, '');
+  const assetNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
+  const reporterName = t.name || t.reporter_name || '-';
   const reporterTel = t.tel || '-';
-  const dateStr = fmt(t.created_at) || '-';
+  const reporterEmail = t.email || '-';
+  const dateStr = fmt(t.created_at) || (t.date || '-');
 
-  const photoUrl = t.photos?.length ? url(t.photos[0]) : null;
+  const photos = t.photos || [];
 
   return `
-    <div style="max-width:900px; margin:0 auto;">
+    <div style="max-width:960px; margin:0 auto;">
       <div style="margin-bottom:14px;">
         <button class="btn btn-outline btn-sm" onclick="closeTaskDetail()">← กลับไปยังรายการ</button>
       </div>
@@ -205,36 +207,58 @@ function vTaskDetail() {
         <div class="task-detail-container">
           <!-- Left: Photo Preview -->
           <div>
-            ${photoUrl
-              ? `<img src="${photoUrl}" alt="รูปภาพปัญหา" class="task-preview-photo" onclick="zoom('${t.photos?.[0] || ''}')" style="cursor:zoom-in;">
-                 <span class="mut" style="font-size:13px; display:block; text-align:center; margin-top:6px;">คลิกเพื่อดูรูปขนาดเต็ม</span>`
+            ${photos.length
+              ? `<div style="display:flex; flex-direction:column; gap:8px;">
+                   <img src="${url(photos[0])}" alt="รูปภาพปัญหา" class="task-preview-photo" onclick="zoom('${photos[0]}')" style="cursor:zoom-in;">
+                   ${photos.length > 1 ? `
+                     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                       ${photos.slice(1).map(p => `
+                         <img src="${url(p)}" onclick="zoom('${p}')" style="width:58px; height:58px; object-fit:cover; border-radius:6px; cursor:zoom-in; border:1px solid #cbd5e1;">
+                       `).join('')}
+                     </div>
+                   ` : ''}
+                   <span class="mut" style="font-size:13px; display:block; text-align:center; margin-top:4px;">คลิกเพื่อดูรูปขนาดเต็ม</span>
+                 </div>`
               : `<div class="task-preview-photo" style="display:flex; align-items:center; justify-content:center; background:var(--bg-subtle); border:1px dashed var(--border); border-radius:var(--radius-md);">
                    <span style="font-size:36px; opacity:0.3;">📷</span>
                  </div>
-                 <span class="mut" style="font-size:13px; display:block; text-align:center; margin-top:6px;">ไม่มีรูปภาพ</span>`
+                 <span class="mut" style="font-size:13px; display:block; text-align:center; margin-top:6px;">ไม่มีรูปภาพแนบ</span>`
             }
           </div>
 
-          <!-- Right: Ticket Information -->
-          <div style="display:flex; flex-direction:column; gap:12px; font-size:16px;">
-            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-              <b style="font-size:18px; color:var(--text-main);">เลขที่งาน : ${esc(t.id)}</b>
-              ${t.urgent ? '<span class="badge badge-urgent"><span class="badge-dot"></span> ด่วน</span>' : '<span class="badge badge-normal">ปกติ</span>'}
-              <span class="badge badge-doing" style="margin-left:auto;">${esc(t.cat || 'ซ่อมแซม')}</span>
+          <!-- Right: Ticket Information (ข้อมูลที่ผู้แจ้งกรอกทั้งหมด หัวข้อเป็นตัวหนา) -->
+          <div style="display:flex; flex-direction:column; gap:12px; font-size:15.5px; line-height:1.6;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
+              <span style="font-size:18px; color:#0b2545;"><b>เลขที่งาน :</b> <span style="color:#ea580c; font-weight:800;">${esc(t.id)}</span></span>
+              ${t.urgent ? '<span class="badge badge-urgent"><span class="badge-dot"></span> ❗ ด่วน</span>' : '<span class="badge badge-normal">ความเร่งด่วน: ปกติ</span>'}
+              <span class="badge badge-doing" style="margin-left:auto; font-size:14px; font-weight:700;">${esc(t.cat || 'ซ่อมแซม')}</span>
             </div>
 
-            <div><b class="mut">หัวข้อ :</b> <span style="font-weight:700; font-size:17px; color:var(--primary);">${esc(title)}</span></div>
-            <div><b class="mut">สถานที่ :</b> <span style="font-weight:600;">${esc(loc)}</span></div>
-            <div><b class="mut">ผู้แจ้ง :</b> <span>${esc(reporterName)} (${esc(reporterTel)})</span></div>
-            <div><b class="mut">วันที่แจ้ง :</b> <span style="color:var(--text-muted);">${esc(dateStr)}</span></div>
+            <div><b>หัวข้อ / ชนิดอุปกรณ์ :</b> <span style="font-weight:700; font-size:16.5px; color:var(--primary);">${esc(title)}</span></div>
+            <div><b>ประเภทงาน :</b> <span>${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</span></div>
+            <div>
+              <b>หมายเลขครุภัณฑ์ :</b> 
+              ${assetNo ? `
+                <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</b>
+              ` : `
+                <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
+              `}
+            </div>
+            <div>
+              <b>สถานที่ :</b> <b>อาคาร</b> ${esc(cleanBld)}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} <b>ชั้น</b> ${esc(t.flr || '-')} <b>ห้อง/บริเวณ</b> ${esc(t.room || '-')}
+            </div>
+            <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(reporterName)}</span></div>
+            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(reporterTel)}</span></div>
+            <div><b>อีเมล :</b> <span>${esc(reporterEmail)}</span></div>
+            <div><b>วันที่แจ้งซ่อม :</b> <span style="color:var(--text-muted);">${esc(dateStr)}</span></div>
 
-            <div style="margin-top:8px; background:var(--bg-subtle); padding:14px; border-radius:var(--radius-md); border:1px solid var(--border);">
-              <b style="display:block; margin-bottom:6px; color:var(--text-main); font-size:16px;">รายละเอียดปัญหา:</b>
-              <div style="color:var(--text-main); line-height:1.6; font-size:15.5px;">${esc(sym)}</div>
+            <div style="margin-top:4px; background:var(--bg-subtle); padding:14px; border-radius:var(--radius-md); border:1px solid var(--border);">
+              <b style="display:block; margin-bottom:6px; color:#0b2545; font-size:15.5px;">รายละเอียดปัญหา:</b>
+              <div style="color:#0f172a; line-height:1.6; font-size:15px; font-weight:600;">${esc(sym)}</div>
             </div>
 
             <!-- Action Buttons at bottom of details -->
-            <div class="row sp" style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px; flex-wrap:wrap; gap:10px;">
+            <div class="row sp" style="margin-top:14px; border-top:1px solid var(--border); padding-top:16px; flex-wrap:wrap; gap:10px;">
               <button class="btn btn-outline" style="color:var(--danger); border-color:var(--border);" onclick="closeTaskDetail()">กลับ</button>
               <div class="row" style="gap:8px; flex-wrap:wrap;">
                 ${t.status === 'accepted' ? `

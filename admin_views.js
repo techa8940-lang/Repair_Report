@@ -6,6 +6,52 @@ let adminTechSearch = '';
 let adminTechStatusFilter = 'all'; // 'all' | 'available' | 'busy'
 let adminDashboardPeriod = 'month';
 
+let adminAllYear = 'all';
+let adminAllMonth = 'all';
+let adminTicketSearch = '';
+
+window.setAdminTicketSearch = function(q) {
+  adminTicketSearch = (q || '').trim();
+  render();
+};
+
+window.resetAdminTicketSearch = function() {
+  adminTicketSearch = '';
+  render();
+};
+
+window.setAdminAllYear = function(y) {
+  adminAllYear = y;
+  render();
+};
+
+window.setAdminAllMonth = function(m) {
+  adminAllMonth = m;
+  render();
+};
+
+window.resetAdminAllPeriod = function() {
+  adminAllYear = 'all';
+  adminAllMonth = 'all';
+  render();
+};
+
+function getAdminTicketDateObj(t) {
+  if (t.created_at) {
+    const d = new Date(t.created_at);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (t.done_at) {
+    const d = new Date(t.done_at);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (t.date) {
+    const d = new Date(t.date);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
 window.setAdminTechFilter = function(s) {
   adminTechStatusFilter = s;
   render();
@@ -226,17 +272,35 @@ function vDashboard() {
   `;
 }
 
-// Screen 6: จัดการช่างและมอบหมายงาน
-function vTechsManage() {
-  const allTechs = techs || [];
+// Screen 6: จัดการบัญชีผู้ใช้งาน (ผู้แจ้งซ่อม, ช่างเทคนิค & ผู้ดูแลระบบ)
+let adminStaffRoleFilter = 'all'; // 'all' | 'reporter' | 'tech' | 'admin'
 
-  let filtered = allTechs;
-  if (adminTechStatusFilter === 'available') filtered = allTechs.filter(t => t.status === 'available');
-  if (adminTechStatusFilter === 'busy') filtered = allTechs.filter(t => t.status === 'busy');
+window.setAdminStaffRoleFilter = function(r) {
+  adminStaffRoleFilter = r;
+  render();
+};
+
+function vTechsManage() {
+  const staffList = (typeof allStaff !== 'undefined' && allStaff.length) ? allStaff : (techs || []);
+
+  const allReporters = staffList.filter(t => t.role === 'reporter' || (!t.role && t.role !== 'tech' && t.role !== 'admin'));
+  const allTechs = staffList.filter(t => t.role === 'tech');
+  const allAdmins = staffList.filter(t => t.role === 'admin');
+
+  let filtered = staffList;
+  if (adminStaffRoleFilter === 'reporter') filtered = allReporters;
+  if (adminStaffRoleFilter === 'tech') filtered = allTechs;
+  if (adminStaffRoleFilter === 'admin') filtered = allAdmins;
+
+  if (adminTechStatusFilter === 'available') filtered = filtered.filter(t => t.status === 'available' || !t.status);
+  if (adminTechStatusFilter === 'busy') filtered = filtered.filter(t => t.status === 'busy');
+
   if (adminTechSearch) {
     filtered = filtered.filter(t => 
-      t.name.toLowerCase().includes(adminTechSearch) ||
+      (t.name || '').toLowerCase().includes(adminTechSearch) ||
+      (t.email || '').toLowerCase().includes(adminTechSearch) ||
       (t.role_desc || '').toLowerCase().includes(adminTechSearch) ||
+      (t.org || '').toLowerCase().includes(adminTechSearch) ||
       (t.skill || '').toLowerCase().includes(adminTechSearch)
     );
   }
@@ -249,27 +313,50 @@ function vTechsManage() {
     <!-- Screen 6 Header -->
     <div class="card-header-row" style="margin-bottom:20px; flex-wrap:wrap; gap:10px;">
       <h2 style="font-size:22px; font-weight:800; display:flex; align-items:center; gap:8px;">
-        <span>👥</span> จัดการช่างและมอบหมายงาน
+        <span>👥</span> จัดการบัญชีผู้ใช้งาน
       </h2>
     </div>
 
     <div class="admin-techs-grid">
       <!-- Left (2/3): Search, Filter & Technicians Table / Cards -->
       <div class="content-card">
+        <!-- Filter Tabs & Actions Bar (ในกรอบเดียวกัน: ซ้ายมีแท็บ ขวามีปุ่มเพิ่มบัญชีใหม่) -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+          <div class="filter-pills" style="margin:0;">
+            <button class="filter-pill ${adminStaffRoleFilter === 'all' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('all')">
+              ทั้งหมด (${staffList.length})
+            </button>
+            <button class="filter-pill ${adminStaffRoleFilter === 'reporter' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('reporter')">
+              👤 ผู้แจ้งซ่อม (${allReporters.length})
+            </button>
+            <button class="filter-pill ${adminStaffRoleFilter === 'tech' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('tech')">
+              👨‍🔧 ช่างซ่อมบำรุง (${allTechs.length})
+            </button>
+            <button class="filter-pill ${adminStaffRoleFilter === 'admin' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('admin')">
+              👑 ผู้ดูแลระบบ (${allAdmins.length})
+            </button>
+          </div>
+
+          <!-- มุมขวา ในกรอบเดียวกับที่มี ผู้ดูแลระบบ ช่างซ่อมบำรุง -->
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-primary" style="white-space:nowrap; padding:8px 16px; font-weight:800; font-size:14.5px; border-radius:8px;" onclick="openAddStaffModal()">
+              + เพิ่มบัญชีใหม่
+            </button>
+          </div>
+        </div>
+
         <div class="filter-bar" style="flex-wrap:wrap; gap:10px;">
           <div class="search-input-wrap" style="flex:1; min-width:200px;">
             <span class="search-icon">🔍</span>
-            <input class="form-control" placeholder="ค้นหาช่าง..." value="${esc(adminTechSearch)}" oninput="setAdminTechSearch(this.value)" style="font-size:16px;">
+            <input class="form-control" placeholder="ค้นหาตามชื่อ, อีเมล, หน่วยงาน, ความเชี่ยวชาญ..." value="${esc(adminTechSearch)}" oninput="setAdminTechSearch(this.value)" style="font-size:15px; height:42px;">
           </div>
 
-          <div style="display:flex; gap:8px; width:100%; max-width:100%;">
-            <select class="form-control" style="flex:1; font-weight:700; font-size:15px;" onchange="setAdminTechFilter(this.value)">
+          <div style="display:flex; gap:8px; width:100%; max-width:240px;">
+            <select class="form-control" style="flex:1; font-weight:700; font-size:14.5px; height:42px;" onchange="setAdminTechFilter(this.value)">
               <option value="all" ${adminTechStatusFilter === 'all' ? 'selected' : ''}>สถานะ: ทั้งหมด ∨</option>
-              <option value="available" ${adminTechStatusFilter === 'available' ? 'selected' : ''}>สถานะ: ว่าง</option>
-              <option value="busy" ${adminTechStatusFilter === 'busy' ? 'selected' : ''}>สถานะ: ไม่ว่าง</option>
+              <option value="available" ${adminTechStatusFilter === 'available' ? 'selected' : ''}>สถานะ: พร้อมรับงาน</option>
+              <option value="busy" ${adminTechStatusFilter === 'busy' ? 'selected' : ''}>สถานะ: ปฏิบัติงานอยู่</option>
             </select>
-
-            <button class="btn btn-primary" style="white-space:nowrap; padding:10px 16px;" onclick="openAddTechModal()">+ เพิ่มช่าง</button>
           </div>
         </div>
 
@@ -279,33 +366,58 @@ function vTechsManage() {
             <thead>
               <tr>
                 <th>ชื่อ-สกุล</th>
-                <th>ตำแหน่ง</th>
-                <th>ความเชี่ยวชาญ</th>
-                <th>สถานะ</th>
-                <th>จำนวนงานที่รับ</th>
-                <th>การจัดการ</th>
+                <th>บทบาท</th>
+                <th>อีเมล / บัญชี</th>
+                <th>หน่วยงาน &amp; ความเชี่ยวชาญ</th>
+                <th>งานที่รับ</th>
+                <th style="text-align:center;">การจัดการ</th>
               </tr>
             </thead>
             <tbody>
-              ${filtered.length ? filtered.map(t => `
-                <tr>
-                  <td style="font-weight:700; font-size:16px;">${esc(t.name)}</td>
-                  <td style="font-size:15px;">${esc(t.role_desc || 'ช่างเทคนิค')}</td>
-                  <td style="color:var(--text-muted); font-size:15px;">${esc(t.skill || 'ทั่วไป')}</td>
-                  <td>
-                    ${t.status === 'busy' 
-                      ? '<span class="badge badge-busy">ไม่ว่าง</span>' 
-                      : '<span class="badge badge-avail">ว่าง</span>'}
-                  </td>
-                  <td style="font-weight:700; text-align:center; font-size:16px;">${t.jobs || 0} งาน</td>
-                  <td>
-                    <button class="btn btn-primary btn-sm" onclick="openAssignModal('${t.id}')">มอบหมาย</button>
-                  </td>
-                </tr>
-              `).join('') : `
+              ${filtered.length ? filtered.map(t => {
+                const isAdmin = t.role === 'admin';
+                const isReporter = t.role === 'reporter' || (!t.role && t.role !== 'tech' && t.role !== 'admin');
+                const isTech = t.role === 'tech';
+
+                return `
+                  <tr>
+                    <td style="font-weight:700; font-size:15.5px; color:#0b2545;">
+                      ${esc(t.name)}
+                    </td>
+                    <td>
+                      <span class="badge" style="font-weight:700; font-size:12.5px; ${isAdmin ? 'background:#fef3c7; color:#b45309; border:1px solid #fde68a;' : isReporter ? 'background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;' : 'background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;'}">
+                        ${isAdmin ? '👑 ผู้ดูแลระบบ' : isReporter ? '👤 ผู้แจ้งซ่อม' : '👨‍🔧 ช่างเทคนิค'}
+                      </span>
+                    </td>
+                    <td style="font-size:14px; font-family:monospace; color:#475569;">
+                      ${esc(t.email || '-')}
+                    </td>
+                    <td style="font-size:14px; color:#334155;">
+                      <div><b>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
+                      ${t.org ? `<div style="color:#64748b; font-size:13px;">หน่วยงาน: ${esc(t.org)}</div>` : ''}
+                      ${isTech && t.skill ? `<div style="color:#64748b; font-size:13px;">เชี่ยวชาญ: ${esc(t.skill)}</div>` : ''}
+                    </td>
+                    <td style="font-weight:700; font-size:14.5px; white-space:nowrap;">
+                      ${isTech ? `<span style="color:#0284c7;">${t.jobs || 0} งาน</span>` : '<span style="color:#94a3b8;">-</span>'}
+                    </td>
+                    <td style="white-space:nowrap; text-align:center;">
+                      <div style="display:inline-flex; gap:6px;">
+                        ${isTech ? `
+                          <button class="btn btn-primary btn-sm" style="font-size:12.5px; padding:4px 10px;" onclick="openAssignModal('${t.id}')">
+                            มอบหมาย
+                          </button>
+                        ` : ''}
+                        <button class="btn btn-outline btn-sm" style="font-size:12.5px; padding:4px 12px; font-weight:700; border-radius:8px; color:#0b2545; border-color:#94a3b8; display:inline-flex; align-items:center; gap:4px;" onclick="openEditStaffModal('${t.id}')">
+                          ✏️ แก้ไขบัญชี
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('') : `
                 <tr>
                   <td colspan="6" class="mut" style="text-align:center; padding:36px; font-size:16px;">
-                    ยังไม่มีข้อมูลช่างในระบบ สามารถกดปุ่ม <b>"+ เพิ่มช่างใหม่"</b> ด้านบนเพื่อลงทะเบียนช่างได้ทันที
+                    ยังไม่มีข้อมูลบัญชีผู้ใช้ในระบบ สามารถกดปุ่ม <b>"+ เพิ่มบัญชีใหม่"</b> ด้านบนเพื่อลงทะเบียนได้ทันที
                   </td>
                 </tr>
               `}
@@ -315,32 +427,47 @@ function vTechsManage() {
 
         <!-- Mobile View Cards -->
         <div class="mobile-only-cards" style="display:none; flex-direction:column; gap:12px; margin-top:14px;">
-          ${filtered.length ? filtered.map(t => `
-            <div style="background:var(--bg-subtle); border:1.5px solid var(--border); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:8px;">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <b style="font-size:16.5px; color:var(--text-main);">${esc(t.name)}</b>
-                ${t.status === 'busy' 
-                  ? '<span class="badge badge-busy">ไม่ว่าง</span>' 
-                  : '<span class="badge badge-avail">ว่าง</span>'}
-              </div>
+          ${filtered.length ? filtered.map(t => {
+            const isAdmin = t.role === 'admin';
+            const isReporter = t.role === 'reporter' || (!t.role && t.role !== 'tech' && t.role !== 'admin');
+            const isTech = t.role === 'tech';
 
-              <div style="display:flex; flex-direction:column; gap:3px; font-size:14.5px; color:var(--text-muted);">
-                <div>💼 ตำแหน่ง: <b style="color:var(--text-main);">${esc(t.role_desc || 'ช่างเทคนิค')}</b></div>
-                <div>🛠️ ความเชี่ยวชาญ: <span>${esc(t.skill || 'ทั่วไป')}</span></div>
-              </div>
+            return `
+              <div style="background:var(--bg-subtle); border:1.5px solid var(--border); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <b style="font-size:16px; color:#0b2545;">${esc(t.name)}</b>
+                  <span class="badge" style="font-weight:700; font-size:12px; ${isAdmin ? 'background:#fef3c7; color:#b45309;' : isReporter ? 'background:#f1f5f9; color:#475569;' : 'background:#e0f2fe; color:#0369a1;'}">
+                    ${isAdmin ? '👑 แอดมิน' : isReporter ? '👤 ผู้แจ้ง' : '👨‍🔧 ช่าง'}
+                  </span>
+                </div>
 
-              <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed var(--border); padding-top:10px; margin-top:4px;">
-                <span style="font-size:14.5px; font-weight:700; color:var(--text-main);">
-                  📋 รับแล้ว: <span style="color:var(--primary); font-size:16px;">${t.jobs || 0}</span> งาน
-                </span>
-                <button class="btn btn-primary btn-sm" style="min-height:38px; padding:6px 16px;" onclick="openAssignModal('${t.id}')">
-                  มอบหมายงาน
-                </button>
+                <div style="display:flex; flex-direction:column; gap:3px; font-size:14px; color:#475569;">
+                  <div>📧 อีเมล: <span style="font-family:monospace; font-weight:700;">${esc(t.email || '-')}</span></div>
+                  <div>💼 ตำแหน่ง: <b>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
+                  ${t.org ? `<div>🏢 หน่วยงาน: <span>${esc(t.org)}</span></div>` : ''}
+                  ${isTech && t.skill ? `<div>🛠️ เชี่ยวชาญ: <span>${esc(t.skill)}</span></div>` : ''}
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed var(--border); padding-top:10px; margin-top:4px;">
+                  <span style="font-size:14px; font-weight:700;">
+                    ${isTech ? `📋 รับแล้ว: <b style="color:var(--primary);">${t.jobs || 0}</b> งาน` : ''}
+                  </span>
+                  <div style="display:flex; gap:6px;">
+                    ${isTech ? `
+                      <button class="btn btn-primary btn-sm" onclick="openAssignModal('${t.id}')">
+                        มอบหมาย
+                      </button>
+                    ` : ''}
+                    <button class="btn btn-outline btn-sm" style="font-size:12.5px; padding:4px 10px; font-weight:700;" onclick="openEditStaffModal('${t.id}')">
+                      ✏️ แก้ไขบัญชี
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          `).join('') : `
+            `;
+          }).join('') : `
             <div style="text-align:center; padding:28px 16px; color:var(--text-muted); font-size:15px; background:var(--bg-subtle); border-radius:var(--radius-md);">
-              ยังไม่มีข้อมูลช่างในระบบ สามารถกดปุ่ม <b>"+ เพิ่มช่าง"</b> ด้านบนเพื่อลงทะเบียนช่างได้ทันที
+              ยังไม่มีข้อมูลในระบบ สามารถกดปุ่ม <b>"+ เพิ่มบัญชีใหม่"</b> ด้านบนเพื่อลงทะเบียนได้ทันที
             </div>
           `}
         </div>
@@ -349,19 +476,23 @@ function vTechsManage() {
       <!-- Right (1/3): Summary & Performance -->
       <div style="display:flex; flex-direction:column; gap:16px;">
         <div class="chart-card">
-          <div class="chart-header" style="font-size:17px;">สรุปทีมช่าง</div>
-          <div style="padding:16px 8px; font-size:16px; display:flex; flex-direction:column; gap:12px;">
+          <div class="chart-header" style="font-size:17px;">สรุปผู้ใช้งานในระบบ</div>
+          <div style="padding:16px 8px; font-size:15px; display:flex; flex-direction:column; gap:12px;">
             <div style="display:flex; justify-content:space-between;">
-              <span class="mut">จำนวนช่างทั้งหมด:</span>
-              <b style="color:var(--primary); font-size:18px;">${allTechs.length} ท่าน</b>
+              <span class="mut">ผู้ใช้งานทั้งหมด:</span>
+              <b style="color:var(--primary); font-size:17px;">${staffList.length} ท่าน</b>
             </div>
             <div style="display:flex; justify-content:space-between;">
-              <span class="mut">ช่างที่พร้อมรับงาน:</span>
-              <b style="color:var(--success); font-size:18px;">${allTechs.filter(t => t.status !== 'busy').length} ท่าน</b>
+              <span class="mut">ผู้แจ้งซ่อม (Reporter):</span>
+              <b style="color:#0284c7; font-size:17px;">${allReporters.length} ท่าน</b>
             </div>
             <div style="display:flex; justify-content:space-between;">
-              <span class="mut">งานที่มอบหมายแล้ว:</span>
-              <b style="font-size:18px;">${T.filter(t => t.tech_name).length} งาน</b>
+              <span class="mut">ช่างซ่อมบำรุง (Tech):</span>
+              <b style="color:#ea580c; font-size:17px;">${allTechs.length} ท่าน</b>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span class="mut">ผู้ดูแลระบบ (Admin):</span>
+              <b style="color:#b45309; font-size:17px;">${allAdmins.length} ท่าน</b>
             </div>
           </div>
         </div>
@@ -379,42 +510,408 @@ function vTechsManage() {
   `;
 }
 
-window.openAddTechModal = function() {
-  $('#dlg').innerHTML = `
-    <h3 style="font-size:17px; margin-bottom:14px;">+ เพิ่มข้อมูลช่างเทคนิคใหม่</h3>
-    <form onsubmit="saveNewTech(event)">
-      <div class="form-group" style="margin-bottom:10px;">
-        <label>ชื่อ - สกุล</label>
-        <input class="form-control" name="name" required placeholder="เช่น นายสมเกียรติ มั่นคง">
+// Modal สมัครบัญชีใหม่ให้ช่าง / แอดมิน
+window.openAddStaffModal = function() {
+  const dlg = $('#dlg');
+  if (!dlg) return;
+  dlg.className = '';
+  dlg.innerHTML = `
+    <div style="padding:22px 24px; max-width:540px; margin:0 auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1.5px solid #e2e8f0; padding-bottom:12px;">
+        <h3 style="font-size:19px; font-weight:800; color:#0b2545; margin:0; display:flex; align-items:center; gap:8px;">
+          <span>👤➕</span> เพิ่มบัญชีผู้ใช้ใหม่ (ช่าง / แอดมิน)
+        </h3>
+        <button type="button" onclick="document.querySelector('#dlg').close()" style="background:none; border:none; font-size:26px; cursor:pointer; color:#64748b; line-height:1;">&times;</button>
       </div>
-      <div class="form-group" style="margin-bottom:10px;">
-        <label>ตำแหน่ง</label>
-        <input class="form-control" name="role_desc" required placeholder="เช่น ช่างไฟฟ้า, ช่างประปา">
-      </div>
-      <div class="form-group" style="margin-bottom:14px;">
-        <label>ความเชี่ยวชาญ</label>
-        <input class="form-control" name="skill" required placeholder="เช่น ไฟฟ้า, แสงสว่าง, เครื่องปรับอากาศ">
-      </div>
-      <div class="row sp" style="border-top:1px solid var(--border); padding-top:12px;">
-        <button type="button" class="btn btn-outline" onclick="$('#dlg').close()">ยกเลิก</button>
-        <button type="submit" class="btn btn-primary">บันทึกข้อมูลช่าง</button>
-      </div>
-    </form>
+
+      <form onsubmit="saveNewStaff(event)">
+        <!-- 1. เลือกบทบาท (ช่าง หรือ แอดมิน) -->
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:6px; font-size:14.5px;">เลือกประเภทบัญชี:</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <label style="display:flex; align-items:center; gap:8px; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:10px; cursor:pointer; font-weight:700; background:#f0f9ff;" id="label_role_tech">
+              <input type="radio" name="role" value="tech" checked onchange="toggleStaffFormFields('tech')">
+              <span>👨‍🔧 ช่างซ่อมบำรุง</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:10px; cursor:pointer; font-weight:700; background:#fffbeb;" id="label_role_admin">
+              <input type="radio" name="role" value="admin" onchange="toggleStaffFormFields('admin')">
+              <span>👑 ผู้ดูแลระบบ (Admin)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 2. ชื่อ - สกุล -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">ชื่อ - นามสกุล <span style="color:#ef4444;">*</span></label>
+          <input class="form-control" name="name" required placeholder="เช่น นายสมเกียรติ มั่นคง" style="height:44px; font-size:15px;">
+        </div>
+
+        <!-- 3. อีเมลสำหรับ Login -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">อีเมลสำหรับเข้าสู่ระบบ (Email) <span style="color:#ef4444;">*</span></label>
+          <input class="form-control" type="email" name="email" required placeholder="เช่น somkiat@nuspark.com" style="height:44px; font-size:15px;">
+          <small style="color:#64748b; font-size:12.5px;">* ใช้เป็นบัญชีสำหรับ Login เข้าสู่ระบบ</small>
+        </div>
+
+        <!-- 4. รหัสผ่าน -->
+        <div class="form-group" style="margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <label style="font-weight:700; color:#0b2545; margin:0; font-size:14px;">รหัสผ่านเข้าใช้งาน (Password) <span style="color:#ef4444;">*</span></label>
+            <button type="button" style="background:none; border:none; color:#ea580c; font-size:12.5px; font-weight:700; cursor:pointer;" onclick="generateStaffPassword()">🎲 สุ่มรหัสผ่าน</button>
+          </div>
+          <input class="form-control" type="text" id="staff_pw_input" name="password" required value="Nusp@2026" placeholder="กำหนดรหัสผ่าน เช่น 123456" style="height:44px; font-size:15px; font-family:monospace; font-weight:700;">
+          <small style="color:#64748b; font-size:12.5px;">* ระบบจะแสดงรหัสผ่านนี้อีกครั้งเพื่อให้บันทึกและส่งให้ผู้ใช้งาน</small>
+        </div>
+
+        <!-- 5. เบอร์โทรศัพท์ -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">เบอร์โทรศัพท์ (ถ้ามี)</label>
+          <input class="form-control" type="tel" name="tel" placeholder="เช่น 081-234-5678" style="height:44px; font-size:15px;">
+        </div>
+
+        <!-- 6. ฟิลด์เฉพาะของช่าง (ตำแหน่ง & ความเชี่ยวชาญ) -->
+        <div id="tech_extra_fields">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">ตำแหน่ง</label>
+            <input class="form-control" name="role_desc" placeholder="เช่น ช่างไฟฟ้า, ช่างประปา, ช่างแอร์" style="height:44px; font-size:15px;">
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">ความเชี่ยวชาญ</label>
+            <input class="form-control" name="skill" placeholder="เช่น ไฟฟ้า, แสงสว่าง, เครื่องปรับอากาศ" style="height:44px; font-size:15px;">
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top:1px solid #e2e8f0; padding-top:14px;">
+          <button type="button" class="btn btn-outline" onclick="document.querySelector('#dlg').close()" style="min-width:100px;">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary" style="font-weight:800; min-width:160px;">💾 บันทึกสร้างบัญชี</button>
+        </div>
+      </form>
+    </div>
   `;
-  $('#dlg').showModal();
+  dlg.showModal();
 };
 
-window.saveNewTech = async function(e) {
+window.openAddTechModal = window.openAddStaffModal;
+
+window.toggleStaffFormFields = function(role) {
+  const extra = document.getElementById('tech_extra_fields');
+  if (extra) extra.style.display = role === 'tech' ? 'block' : 'none';
+};
+
+window.generateStaffPassword = function() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) rand += chars[Math.floor(Math.random() * chars.length)];
+  const pw = 'Nusp@' + rand;
+  const input = document.getElementById('staff_pw_input');
+  if (input) input.value = pw;
+};
+
+window.saveNewStaff = async function(e) {
   e.preventDefault();
   const f = new FormData(e.target);
-  const name = f.get('name').trim();
-  const role_desc = f.get('role_desc').trim();
-  const skill = f.get('skill').trim();
+  const role = f.get('role') || 'tech';
+  const name = (f.get('name') || '').trim();
+  const email = (f.get('email') || '').trim();
+  const password = (f.get('password') || '').trim();
+  const tel = (f.get('tel') || '').trim();
+  const role_desc = (f.get('role_desc') || (role === 'admin' ? 'ผู้ดูแลระบบ' : 'ช่างเทคนิค')).trim();
+  const skill = (f.get('skill') || (role === 'admin' ? '-' : 'ทั่วไป')).trim();
 
-  techs.unshift({ id: 't_' + Date.now(), name, role_desc, skill, status: 'available', jobs: 0 });
-  $('#dlg').close();
+  toast(`กำลังสร้างบัญชี ${role === 'admin' ? 'แอดมิน' : 'ช่าง'}...`);
+
+  let authUserId = null;
+  try {
+    const { data: authData, error: authErr } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name, role, tel, role_desc, skill: role === 'tech' ? skill : null }
+      }
+    });
+    if (authErr) {
+      console.warn('sb.auth.signUp notice:', authErr);
+    } else {
+      authUserId = authData?.user?.id;
+    }
+  } catch (err) {
+    console.warn('Auth sign up error:', err);
+  }
+
+  const staffId = authUserId || ('staff_' + Date.now());
+  const newStaffObj = {
+    id: staffId,
+    name,
+    role,
+    email,
+    tel,
+    role_desc: role === 'admin' ? 'ผู้ดูแลระบบ' : (role_desc || 'ช่างเทคนิค'),
+    skill: role === 'admin' ? '-' : (skill || 'ทั่วไป'),
+    status: 'available',
+    jobs: 0
+  };
+
+  try {
+    await sb.from('profiles').upsert({
+      id: staffId,
+      name,
+      role,
+      tel,
+      skill: role === 'tech' ? skill : null,
+      role_desc: role === 'admin' ? 'ผู้ดูแลระบบ' : role_desc
+    }, { onConflict: 'id' });
+  } catch (err) {
+    console.warn('profiles upsert error:', err);
+  }
+
+  if (typeof allStaff !== 'undefined') allStaff.unshift(newStaffObj);
+  if (role === 'tech' && typeof techs !== 'undefined') techs.unshift(newStaffObj);
+
+  // แสดงหน้าต่างข้อมูลบัญชีที่สร้างเสร็จเรียบร้อยพร้อมปุ่มคัดลอก
+  const dlg = $('#dlg');
+  if (dlg) {
+    dlg.className = '';
+    dlg.innerHTML = `
+      <div style="padding:24px 22px; max-width:480px; margin:0 auto; text-align:center;">
+        <div style="font-size:52px; margin-bottom:10px;">🎉</div>
+        <h3 style="font-size:20px; font-weight:800; color:#15803d; margin:0 0 8px 0;">สร้างบัญชีผู้ใช้สำเร็จ!</h3>
+        <p style="font-size:14.5px; color:#475569; margin-bottom:16px;">
+          ระบบได้สร้างบัญชีผู้ใช้ใหม่เรียบร้อยแล้ว กรุณาคัดลอกข้อมูลด้านล่างนี้เพื่อส่งให้ผู้ใช้งานสำหรับ Login
+        </p>
+
+        <div style="background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:12px; padding:16px; text-align:left; font-size:15px; line-height:1.8; margin-bottom:20px;">
+          <div><b>ชื่อ - สกุล:</b> <span style="color:#0b2545; font-weight:700;">${esc(name)}</span></div>
+          <div><b>บทบาท:</b> <span class="badge" style="font-weight:700; ${role === 'admin' ? 'background:#fef3c7; color:#b45309;' : 'background:#e0f2fe; color:#0369a1;'}">${role === 'admin' ? '👑 ผู้ดูแลระบบ (Admin)' : '👨‍🔧 ช่างซ่อมบำรุง (Tech)'}</span></div>
+          <div><b>อีเมล (Login):</b> <span style="font-family:monospace; font-weight:800; color:#ea580c;" id="cred_res_email">${esc(email)}</span></div>
+          <div><b>รหัสผ่าน (Password):</b> <span style="font-family:monospace; font-weight:800; color:#0b2545;" id="cred_res_pw">${esc(password)}</span></div>
+          ${tel ? `<div><b>เบอร์โทร:</b> <span>${esc(tel)}</span></div>` : ''}
+        </div>
+
+        <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline" style="min-width:140px; font-weight:700;" onclick="copyStaffCredentials('${esc(name)}', '${esc(role === 'admin' ? 'ผู้ดูแลระบบ' : 'ช่างซ่อมบำรุง')}', '${esc(email)}', '${esc(password)}')">
+            📋 คัดลอกข้อมูล
+          </button>
+          <button type="button" class="btn btn-primary" style="min-width:120px; font-weight:800;" onclick="document.querySelector('#dlg').close(); render();">
+            เสร็จสิ้น
+          </button>
+        </div>
+      </div>
+    `;
+    dlg.showModal();
+  }
+};
+
+window.copyStaffCredentials = function(name, roleName, email, pw) {
+  const text = `บัญชีเข้าสู่ระบบแจ้งซ่อม NUSP\nชื่อ: ${name}\nบทบาท: ${roleName}\nอีเมล: ${email}\nรหัสผ่าน: ${pw}`;
+  navigator.clipboard.writeText(text).then(() => {
+    toast('คัดลอกข้อมูลบัญชีเข้าสู่ระบบเรียบร้อยแล้ว!');
+  }).catch(() => {
+    toast(`อีเมล: ${email} | รหัสผ่าน: ${pw}`);
+  });
+};
+
+// Modal แก้ไขบัญชีผู้ใช้
+window.openEditStaffModal = function(id) {
+  const staffList = (typeof allStaff !== 'undefined' && allStaff.length) ? allStaff : (techs || []);
+  const u = staffList.find(x => String(x.id) === String(id));
+  if (!u) {
+    toast('ไม่พบข้อมูลบัญชีผู้ใช้');
+    return;
+  }
+
+  const dlg = $('#dlg');
+  if (!dlg) return;
+  dlg.className = '';
+
+  const role = u.role || 'reporter';
+  const isAdmin = role === 'admin';
+  const isTech = role === 'tech';
+  const isReporter = !isAdmin && !isTech;
+
+  dlg.innerHTML = `
+    <div style="padding:22px 24px; max-width:540px; margin:0 auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1.5px solid #e2e8f0; padding-bottom:12px;">
+        <h3 style="font-size:19px; font-weight:800; color:#0b2545; margin:0; display:flex; align-items:center; gap:8px;">
+          <span>✏️</span> แก้ไขข้อมูลบัญชีผู้ใช้
+        </h3>
+        <button type="button" onclick="document.querySelector('#dlg').close()" style="background:none; border:none; font-size:26px; cursor:pointer; color:#64748b; line-height:1;">&times;</button>
+      </div>
+
+      <form onsubmit="saveEditStaff(event, '${esc(u.id)}')">
+        <!-- 1. เลือกบทบาทผู้ใช้ -->
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:6px; font-size:14.5px;">บทบาทในระบบ:</label>
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+            <label style="display:flex; align-items:center; gap:6px; padding:10px 8px; border:1.5px solid #cbd5e1; border-radius:10px; cursor:pointer; font-weight:700; font-size:13px; background:#f8fafc;">
+              <input type="radio" name="role" value="reporter" ${isReporter ? 'checked' : ''} onchange="toggleEditStaffRole('reporter')">
+              <span>👤 ผู้แจ้งซ่อม</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; padding:10px 8px; border:1.5px solid #cbd5e1; border-radius:10px; cursor:pointer; font-weight:700; font-size:13px; background:#f0f9ff;">
+              <input type="radio" name="role" value="tech" ${isTech ? 'checked' : ''} onchange="toggleEditStaffRole('tech')">
+              <span>👨‍🔧 ช่างบำรุง</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; padding:10px 8px; border:1.5px solid #cbd5e1; border-radius:10px; cursor:pointer; font-weight:700; font-size:13px; background:#fffbeb;">
+              <input type="radio" name="role" value="admin" ${isAdmin ? 'checked' : ''} onchange="toggleEditStaffRole('admin')">
+              <span>👑 แอดมิน</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 2. ชื่อ - นามสกุล -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">ชื่อ - นามสกุล <span style="color:#ef4444;">*</span></label>
+          <input class="form-control" name="name" required value="${esc(u.name || '')}" style="height:44px; font-size:15px;">
+        </div>
+
+        <!-- 3. อีเมล (บัญชี) -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">อีเมล (Email) / บัญชีเข้าใช้งาน</label>
+          <input class="form-control" type="email" name="email" value="${esc(u.email || '')}" style="height:44px; font-size:15px; font-family:monospace;">
+        </div>
+
+        <!-- 4. เบอร์โทรศัพท์ & หน่วยงาน -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+          <div class="form-group">
+            <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">เบอร์โทรศัพท์</label>
+            <input class="form-control" type="tel" name="tel" value="${esc(u.tel || '')}" placeholder="เช่น 081-234-5678" style="height:44px; font-size:15px;">
+          </div>
+          <div class="form-group">
+            <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">หน่วยงาน / สังกัด</label>
+            <input class="form-control" name="org" value="${esc(u.org || '')}" placeholder="เช่น อาคาร A, อุทยานฯ" style="height:44px; font-size:15px;">
+          </div>
+        </div>
+
+        <!-- 5. ตำแหน่ง & ความเชี่ยวชาญ -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">ตำแหน่ง / คำอธิบายหน้าที่</label>
+          <input class="form-control" name="role_desc" value="${esc(u.role_desc || '')}" placeholder="เช่น ช่างไฟฟ้า, เจ้าหน้าที่ประสานงาน" style="height:44px; font-size:15px;">
+        </div>
+
+        <div id="edit_staff_skill_group" class="form-group" style="margin-bottom:14px; display:${isTech ? 'block' : 'none'};">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">ความเชี่ยวชาญ (เฉพาะช่าง)</label>
+          <input class="form-control" name="skill" value="${esc(u.skill || '')}" placeholder="เช่น ไฟฟ้า, แสงสว่าง, ระบบปรับอากาศ" style="height:44px; font-size:15px;">
+        </div>
+
+        <!-- ปุ่ม Action ด้านล่าง: ซ้ายเป็นปุ่มลบบัญชี ขวาเป็นปุ่มยกเลิกและบันทึก -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1.5px solid #e2e8f0; padding-top:14px; flex-wrap:wrap; gap:10px;">
+          <button type="button" class="btn" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-weight:700; padding:8px 14px; border-radius:8px; font-size:13.5px;" onclick="confirmDeleteStaff('${esc(u.id)}', '${esc(u.name || '')}', '${esc(role)}')">
+            🗑️ ลบบัญชีผู้ใช้นี้
+          </button>
+          
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-outline" onclick="document.querySelector('#dlg').close()" style="min-width:90px;">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary" style="font-weight:800; min-width:130px;">💾 บันทึกการแก้ไข</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  `;
+  dlg.showModal();
+};
+
+window.toggleEditStaffRole = function(role) {
+  const skillGroup = document.getElementById('edit_staff_skill_group');
+  if (skillGroup) skillGroup.style.display = role === 'tech' ? 'block' : 'none';
+};
+
+window.saveEditStaff = async function(e, id) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const role = f.get('role') || 'reporter';
+  const name = (f.get('name') || '').trim();
+  const email = (f.get('email') || '').trim();
+  const tel = (f.get('tel') || '').trim();
+  const org = (f.get('org') || '').trim();
+  const role_desc = (f.get('role_desc') || (role === 'admin' ? 'ผู้ดูแลระบบ' : role === 'reporter' ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง')).trim();
+  const skill = (f.get('skill') || (role === 'tech' ? 'ทั่วไป' : '-')).trim();
+
+  toast('กำลังบันทึกการแก้ไขบัญชี...');
+
+  const updatePayload = {
+    name,
+    role,
+    tel,
+    org,
+    role_desc,
+    skill: role === 'tech' ? skill : null
+  };
+
+  try {
+    await sb.from('profiles').update(updatePayload).eq('id', id);
+  } catch (err) {
+    console.warn('profiles update error:', err);
+  }
+
+  // อัปเดตใน allStaff
+  if (typeof allStaff !== 'undefined') {
+    const target = allStaff.find(x => String(x.id) === String(id));
+    if (target) {
+      Object.assign(target, updatePayload);
+      if (email) target.email = email;
+    }
+  }
+
+  // อัปเดตใน techs ถ้าเป็นช่าง
+  if (typeof techs !== 'undefined') {
+    const techIdx = techs.findIndex(x => String(x.id) === String(id));
+    if (role === 'tech') {
+      if (techIdx >= 0) {
+        Object.assign(techs[techIdx], updatePayload);
+      } else {
+        const fullObj = (typeof allStaff !== 'undefined') ? allStaff.find(x => String(x.id) === String(id)) : null;
+        if (fullObj) techs.push(fullObj);
+      }
+    } else {
+      if (techIdx >= 0) techs.splice(techIdx, 1);
+    }
+  }
+
+  $('#dlg')?.close();
+  toast('บันทึกการแก้ไขบัญชีผู้ใช้เรียบร้อยแล้ว');
   render();
-  toast('เพิ่มข้อมูลช่างเรียบร้อยแล้ว');
+};
+
+// ยืนยันการลบบัญชีผู้ใช้ (Double Confirmation)
+window.confirmDeleteStaff = function(id, name, role) {
+  const dlg = $('#dlg');
+  if (!dlg) return;
+  dlg.className = '';
+  const roleName = role === 'admin' ? '👑 ผู้ดูแลระบบ' : (role === 'reporter' ? '👤 ผู้แจ้งซ่อม' : '👨‍🔧 ช่างเทคนิค');
+  dlg.innerHTML = `
+    <div style="padding:24px 20px; max-width:460px; margin:0 auto; text-align:center;">
+      <div style="font-size:48px; margin-bottom:12px;">⚠️</div>
+      <h3 style="font-size:20px; font-weight:800; color:#b91c1c; margin:0 0 10px 0;">ยืนยันการลบบัญชีผู้ใช้</h3>
+      <p style="font-size:15px; color:#475569; line-height:1.6; margin-bottom:20px;">
+        คุณต้องการลบบัญชีของ <b>${esc(name)}</b> (บทบาท: ${roleName}) ออกจากระบบใช่หรือไม่?<br>
+        <span style="color:#ef4444; font-size:13.5px; font-weight:700;">* การลบจะทำให้บัญชีนี้ไม่สามารถเข้าสู่ระบบได้อีกต่อไป กรุณากดยืนยันการลบอีกครั้ง</span>
+      </p>
+      <div style="display:flex; justify-content:center; gap:12px;">
+        <button type="button" class="btn btn-outline" style="min-width:110px;" onclick="document.querySelector('#dlg').close()">ยกเลิก</button>
+        <button type="button" class="btn" style="background:#dc2626; color:#ffffff; font-weight:800; min-width:140px;" onclick="executeDeleteStaff('${esc(id)}')">🗑️ ยืนยันการลบ</button>
+      </div>
+    </div>
+  `;
+  dlg.showModal();
+};
+
+window.executeDeleteStaff = async function(id) {
+  toast('กำลังลบบัญชีผู้ใช้...');
+  try {
+    await sb.from('profiles').delete().eq('id', id);
+  } catch(err) {
+    console.warn('delete profile error:', err);
+  }
+  if (typeof allStaff !== 'undefined') {
+    const idx = allStaff.findIndex(x => x.id === id);
+    if (idx >= 0) allStaff.splice(idx, 1);
+  }
+  if (typeof techs !== 'undefined') {
+    const idx = techs.findIndex(x => x.id === id);
+    if (idx >= 0) techs.splice(idx, 1);
+  }
+  $('#dlg')?.close();
+  toast('ลบบัญชีผู้ใช้เรียบร้อยแล้ว');
+  render();
 };
 
 window.openAssignModal = function(techId) {
@@ -479,37 +976,153 @@ function vAll() {
     }
   });
 
-  const validTickets = allTickets.filter(t => t.status !== 'deleted');
+  // เรียงลำดับจากใหม่สุดไปเก่าสุด
+  allTickets.sort((a, b) => {
+    const tA = new Date(a.created_at || a.done_at || a.date || 0).getTime();
+    const tB = new Date(b.created_at || b.done_at || b.date || 0).getTime();
+    return tB - tA;
+  });
 
-  let L = allTickets;
+  // รวบรวมรายชื่อปีที่มีในระบบ
+  const yearSet = new Set();
+  allTickets.forEach(t => {
+    const d = getAdminTicketDateObj(t);
+    if (d) yearSet.add(d.getFullYear());
+  });
+  if (!yearSet.size) yearSet.add(new Date().getFullYear());
+  const sortedYears = Array.from(yearSet).sort((a, b) => b - a);
+
+  // รายชื่อเดือนภาษาไทย 12 เดือน
+  const thaiMonths = [
+    { num: '01', name: 'มกราคม' },
+    { num: '02', name: 'กุมภาพันธ์' },
+    { num: '03', name: 'มีนาคม' },
+    { num: '04', name: 'เมษายน' },
+    { num: '05', name: 'พฤษภาคม' },
+    { num: '06', name: 'มิถุนายน' },
+    { num: '07', name: 'กรกฎาคม' },
+    { num: '08', name: 'สิงหาคม' },
+    { num: '09', name: 'กันยายน' },
+    { num: '10', name: 'ตุลาคม' },
+    { num: '11', name: 'พฤศจิกายน' },
+    { num: '12', name: 'ธันวาคม' }
+  ];
+
+  // กรองตามช่วงเวลาปีและเดือน
+  const isPeriodFiltered = adminAllYear !== 'all' || adminAllMonth !== 'all';
+  const periodFiltered = allTickets.filter(t => {
+    const d = getAdminTicketDateObj(t);
+    if (!d) return adminAllYear === 'all' && adminAllMonth === 'all';
+    if (adminAllYear !== 'all' && d.getFullYear() !== Number(adminAllYear)) return false;
+    if (adminAllMonth !== 'all') {
+      const mStr = String(d.getMonth() + 1).padStart(2, '0');
+      if (mStr !== adminAllMonth) return false;
+    }
+    return true;
+  });
+
+  const validTickets = periodFiltered.filter(t => t.status !== 'deleted');
+
+  let L = periodFiltered;
   if (fil === 'all') {
     L = validTickets;
   } else if (fil === 'done') {
-    L = allTickets.filter(t => t.status === 'done' || t.status === 'closed');
+    L = periodFiltered.filter(t => t.status === 'done' || t.status === 'closed');
   } else if (fil === 'doing') {
-    L = allTickets.filter(t => t.status === 'doing');
+    L = periodFiltered.filter(t => t.status === 'doing');
   } else if (fil === 'checking') {
-    L = allTickets.filter(t => t.status === 'checking');
+    L = periodFiltered.filter(t => t.status === 'checking');
   } else if (fil === 'accepted') {
-    L = allTickets.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status)));
+    L = periodFiltered.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status)));
   } else {
-    L = allTickets.filter(t => t.status === fil);
+    L = periodFiltered.filter(t => t.status === fil);
   }
 
-  const acceptedCount = allTickets.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status))).length;
-  const doingCount = allTickets.filter(t => t.status === 'doing').length;
-  const checkingCount = allTickets.filter(t => t.status === 'checking').length;
-  const doneCount = allTickets.filter(t => t.status === 'done' || t.status === 'closed').length;
-  const deletedCount = allTickets.filter(t => t.status === 'deleted').length;
+  const acceptedCount = periodFiltered.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status))).length;
+  const doingCount = periodFiltered.filter(t => t.status === 'doing').length;
+  const checkingCount = periodFiltered.filter(t => t.status === 'checking').length;
+  const doneCount = periodFiltered.filter(t => t.status === 'done' || t.status === 'closed').length;
+  const deletedCount = periodFiltered.filter(t => t.status === 'deleted').length;
+
+  // ค้นหาด้วยเลขที่ใบซ่อม (เช่น REP-2026-450), หัวข้อ, หมายเลขครุภัณฑ์
+  if (adminTicketSearch) {
+    const q = adminTicketSearch.toLowerCase();
+    L = L.filter(t => {
+      const matchId = (t.id || '').toLowerCase().includes(q);
+      const matchTitle = (t.title || '').toLowerCase().includes(q);
+      const matchAsset = (t.items?.[0]?.asset || '').toLowerCase().includes(q);
+      const matchRep = (t.reporter_name || t.name || '').toLowerCase().includes(q);
+      const matchTech = (t.tech_name || '').toLowerCase().includes(q);
+      return matchId || matchTitle || matchAsset || matchRep || matchTech;
+    });
+  }
 
   return `
     <div class="content-card">
-      <div class="card-header-row">
-        <h2 style="font-size:20px; font-weight:800; display:flex; align-items:center; gap:8px;">
+      <div class="card-header-row" style="flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+        <h2 style="font-size:22px; font-weight:800; display:flex; align-items:center; gap:8px; margin:0;">
           <span>📋</span> สรุปงานซ่อมทั้งหมด
         </h2>
+        <span class="badge badge-doing" style="font-size:14px; padding:6px 14px;">
+          ทั้งหมด ${periodFiltered.length} รายการ
+        </span>
       </div>
 
+      <!-- Filter Bar: ปุ่มเลือกปี + เลือกเดือน + รีเซ็ต -->
+      <div class="done-filter-bar" style="background:#f8fafc; border:1.5px solid #cbd5e1; padding:14px 18px; border-radius:14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <button type="button" class="btn ${!isPeriodFiltered ? 'btn-primary' : 'btn-outline'}" style="font-size:14px; font-weight:700; height:40px; border-radius:8px;" onclick="resetAdminAllPeriod()">
+            ทุกช่วงเวลา (${allTickets.length})
+          </button>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <!-- 1. เลือกปี -->
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label style="font-size:14px; font-weight:700; color:#0b2545;">📅 เลือกปี:</label>
+            <select class="form-control" style="min-width:140px; height:40px; font-size:14px; font-weight:700; border-radius:8px;" onchange="setAdminAllYear(this.value)">
+              <option value="all" ${adminAllYear === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
+              ${sortedYears.map(y => `
+                <option value="${y}" ${String(adminAllYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <!-- 2. เลือกเดือน -->
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label style="font-size:14px; font-weight:700; color:#0b2545;">🗓️ เลือกเดือน:</label>
+            <select class="form-control" style="min-width:140px; height:40px; font-size:14px; font-weight:700; border-radius:8px;" onchange="setAdminAllMonth(this.value)">
+              <option value="all" ${adminAllMonth === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
+              ${thaiMonths.map(m => `
+                <option value="${m.num}" ${adminAllMonth === m.num ? 'selected' : ''}>${m.name}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          ${isPeriodFiltered ? `
+            <button type="button" class="btn btn-outline btn-sm" onclick="resetAdminAllPeriod()" style="color:var(--danger); border-color:#cbd5e1; height:40px; font-size:13.5px;" title="ล้างตัวกรอง">
+              ✕ รีเซ็ต
+            </button>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- ช่องค้นหารายการซ่อมด้วยเลขใบซ่อมในหน้าสรุปงานซ่อม -->
+      <div style="position:relative; margin-bottom:16px;">
+        <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:16px; color:#64748b;">🔍</span>
+        <input class="form-control" type="text" placeholder="ค้นหาด้วยเลขที่ใบซ่อม เช่น REP-2026-450, หัวข้อปัญหา หรือหมายเลขครุภัณฑ์..." value="${esc(adminTicketSearch)}" oninput="setAdminTicketSearch(this.value)" style="padding-left:42px; padding-right:38px; height:46px; font-size:15px; border-radius:10px; border:1.5px solid #cbd5e1; background:#ffffff;">
+        ${adminTicketSearch ? `
+          <button type="button" onclick="resetAdminTicketSearch()" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; font-size:22px; cursor:pointer; line-height:1;" title="ล้างการค้นหา">&times;</button>
+        ` : ''}
+      </div>
+
+      ${adminTicketSearch ? `
+        <div style="margin-top:-6px; margin-bottom:14px; font-size:14.5px; color:#ea580c; font-weight:700; display:flex; align-items:center; gap:6px;">
+          <span>🔍</span> ผลการค้นหาเลขใบซ่อม/คำค้น "${esc(adminTicketSearch)}": พบ <b>${L.length}</b> รายการ
+        </div>
+      ` : ''}
+
+      <!-- สถานะฟิลเตอร์ Pills -->
       <div class="filter-pills" style="margin-bottom:18px;">
         <button class="filter-pill ${fil === 'all' ? 'active' : ''}" onclick="setFil('all')">
           ทั้งหมด (${validTickets.length})
@@ -531,23 +1144,279 @@ function vAll() {
         </button>
       </div>
 
-      <div style="margin-top:12px;">
-        ${L.map(t => card(t, fil === 'deleted' ? '' : `
-          <div class="row" style="margin-top:12px; gap:8px;">
-            ${fil !== 'done' ? `
-              <select id="a_${t.id}" class="form-control" style="flex:1; max-width:240px; font-size:15px;">
-                <option value="">-- เลือกมอบหมายช่าง --</option>
-                ${techs.map(p => `<option value="${p.id}" ${p.id === t.tech_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-              </select>
-              <button class="btn btn-primary btn-sm" onclick="assign('${t.id}')">มอบหมาย</button>
-            ` : ''}
-            <button class="btn btn-outline btn-sm" style="color:var(--danger); border-color:var(--border);" onclick="del('${t.id}')">ลบงาน</button>
+      <!-- รายการย่อแบบ Compact List เหมือนในประวัติช่าง -->
+      <div class="done-compact-list" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">
+        ${L.length ? L.map(t => {
+          const titleText = (typeof getTicketTitle === 'function') ? getTicketTitle(t) : (t.title || t.items?.[0]?.item || 'แจ้งซ่อม');
+          const cleanBld = (t.bld || '-').replace(/^อาคาร\s*/, '');
+          const dateStr = t.created_at ? fmt(t.created_at) : (t.date || '-');
+          const stConfig = (typeof ST !== 'undefined' && ST[t.status]) ? ST[t.status] : (t.status === 'closed' ? ['เสร็จสิ้น', '#10b981'] : ['รอดำเนินการ', '#64748b']);
+          const assetNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
+
+          return `
+            <div class="done-compact-item" id="admin_item_${t.id}" onclick="openAdminTicketModal('${t.id}')" style="cursor:pointer; border:1.5px solid #e2e8f0; border-radius:12px; transition:all 0.2s ease; background:#ffffff;">
+              <div class="done-compact-header" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; flex-wrap:wrap; gap:12px;">
+                <div class="done-compact-left" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <span class="done-compact-id" style="font-weight:800; font-family:monospace; color:#ea580c; font-size:15px;">${esc(t.id)}</span>
+                  ${t.urgent ? '<span class="badge badge-urgent" style="font-size:11.5px; padding:2px 8px;">❗ ด่วน</span>' : ''}
+                  <span class="badge" style="background:${stConfig[1]}15; color:${stConfig[1]}; border:1px solid ${stConfig[1]}; font-size:12.5px; font-weight:700;">
+                    ${stConfig[0]}
+                  </span>
+                  <span class="done-compact-title" style="font-weight:700; color:#0b2545; font-size:15.5px;">${esc(titleText)}</span>
+                  ${assetNo ? `<span style="font-size:12.5px; font-family:monospace; color:#c2410c; background:#fff7ed; padding:1px 6px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</span>` : ''}
+                  <span class="done-compact-loc" style="font-size:13.5px; color:#64748b;">📍 อาคาร ${esc(cleanBld)} ชั้น ${esc(t.flr || '-')} (ห้อง ${esc(t.room || '-')})</span>
+                  <span style="font-size:13px; font-weight:700; color:${t.tech_name ? '#0369a1' : '#64748b'}; background:${t.tech_name ? '#f0f9ff' : '#f8fafc'}; border:1px solid ${t.tech_name ? '#bae6fd' : '#cbd5e1'}; padding:2px 8px; border-radius:6px; white-space:nowrap;">
+                    👨‍🔧 ${t.tech_name ? `ช่าง: ${esc(t.tech_name)}` : '<span style="color:#94a3b8;">ยังไม่ได้มอบหมาย</span>'}
+                  </span>
+                </div>
+                <div class="done-compact-right" style="display:flex; align-items:center; gap:12px;">
+                  <span class="done-compact-date" style="font-size:13px; color:#64748b; font-weight:600;">🕒 ${esc(dateStr)}</span>
+                  <button type="button" class="btn btn-outline btn-sm" style="font-size:13px; font-weight:700; border-radius:8px; border-color:#0b2545; color:#0b2545;" onclick="event.stopPropagation(); openAdminTicketModal('${t.id}')">
+                    ดูรายละเอียด 🔍
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('') : `
+          <div class="mut" style="text-align:center; padding:48px 20px; background:#f8fafc; border:1.5px dashed #cbd5e1; border-radius:12px;">
+            <div style="font-size:36px; margin-bottom:8px;">📋</div>
+            <div style="font-size:16px; font-weight:700; color:#475569;">ไม่พบรายการแจ้งซ่อมในช่วงเวลานี้หรือสถานะนี้</div>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:12px;" onclick="resetAdminAllPeriod(); setFil('all');">รีเซ็ตตัวกรองทั้งหมด</button>
           </div>
-        `)).join('') || '<div class="mut" style="text-align:center; padding:32px;">ไม่มีรายการในสถานะนี้</div>'}
+        `}
       </div>
     </div>
   `;
 }
+
+// ป็อปอัพรายละเอียดงานซ่อมของแอดมิน (Pop-up Modal - ขยายขนาดพอดี ไม่ต้องเลื่อนซ้ายขวา)
+window.openAdminTicketModal = function(id) {
+  const t = (typeof T !== 'undefined' ? T.find(x => x.id === id) : null) || (JSON.parse(localStorage.getItem('myT') || '[]').find(x => x.no === id || x.id === id));
+  if (!t) {
+    toast('ไม่พบข้อมูลใบแจ้งซ่อม');
+    return;
+  }
+
+  const dlg = $('#dlg');
+  if (!dlg) return;
+
+  const titleText = (typeof getTicketTitle === 'function') ? getTicketTitle(t) : (t.title || t.items?.[0]?.item || 'แจ้งซ่อม');
+  const descText = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || t.items?.[0]?.sym || '-');
+  const cleanBld = (t.bld || '-').replace(/^อาคาร\s*/, '');
+  const assetNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
+  const reporterName = t.name || t.reporter_name || '-';
+  const reporterTel = t.tel || '-';
+  const reporterEmail = t.email || '-';
+  const dateStr = t.created_at ? fmt(t.created_at) : (t.date || '-');
+  const photos = t.photos || [];
+  const donePhotos = t.done_photos || [];
+  const usedMats = (typeof U !== 'undefined' ? U : []).filter(u => u.ticket_id === t.id);
+  const stConfig = (typeof ST !== 'undefined' && ST[t.status]) ? ST[t.status] : (t.status === 'closed' ? ['เสร็จสิ้น', '#10b981'] : ['รอดำเนินการ', '#64748b']);
+
+  // Stepper HTML
+  const stepsHtml = (typeof steps === 'function') ? steps(t) : '';
+
+  dlg.className = 'admin-ticket-dialog-wide';
+  dlg.innerHTML = `
+    <div style="width:100%; box-sizing:border-box; max-height:88vh; overflow-y:auto; overflow-x:hidden; padding:22px 26px;">
+      <!-- Header -->
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1.5px solid #e2e8f0; padding-bottom:14px; margin-bottom:16px; gap:12px;">
+        <div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+            <span style="font-size:20px; font-weight:800; color:#ea580c; font-family:monospace;">${esc(t.id)}</span>
+            ${t.urgent ? '<span class="badge badge-urgent" style="font-size:12px;">❗ ด่วน</span>' : '<span class="badge badge-normal" style="font-size:12px;">ปกติ</span>'}
+            <span class="badge" style="background:${stConfig[1]}15; color:${stConfig[1]}; border:1px solid ${stConfig[1]}; font-size:12.5px; font-weight:700;">
+              ${stConfig[0]}
+            </span>
+          </div>
+          <div style="font-size:13.5px; color:#64748b;">
+            <b>วันที่แจ้ง:</b> ${esc(dateStr)} ${t.done_at ? `| <b>เสร็จสิ้นเมื่อ:</b> ${fmt(t.done_at)}` : ''}
+          </div>
+        </div>
+        <button type="button" onclick="document.querySelector('#dlg').close()" style="background:none; border:none; font-size:26px; cursor:pointer; color:#64748b; line-height:1; padding:0 4px;">&times;</button>
+      </div>
+
+      <!-- Stepper ลำดับขั้นตอน -->
+      ${stepsHtml ? `
+        <div style="margin-bottom:20px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:14px 10px;">
+          ${stepsHtml}
+        </div>
+      ` : ''}
+
+      <!-- Grid: Ticket Details & Photos -->
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Card 1: ข้อมูลที่ผู้แจ้งกรอกทั้งหมด -->
+        <div style="background:#ffffff; border:1.5px solid #e2e8f0; border-radius:12px; padding:18px;">
+          <h4 style="font-size:16.5px; font-weight:800; color:#0b2545; margin:0 0 14px 0; border-bottom:1px solid #f1f5f9; padding-bottom:10px; display:flex; align-items:center; gap:8px;">
+            <span>📋</span> ข้อมูลการแจ้งซ่อม (ที่ผู้แจ้งกรอก)
+          </h4>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; font-size:15px; line-height:1.6;">
+            <div><b>หัวข้อ / ชนิดอุปกรณ์ :</b> <span style="font-weight:700; color:#0b2545;">${esc(titleText)}</span></div>
+            <div><b>ประเภทงาน :</b> <span>${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</span></div>
+            <div>
+              <b>หมายเลขครุภัณฑ์ :</b>
+              ${assetNo ? `
+                <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</b>
+              ` : `
+                <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
+              `}
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:12px; padding:2px 8px; margin-left:6px; border-radius:6px;" onclick="editTicketAsset('${esc(t.id)}')">
+                ✏️ แก้ไขเลขครุภัณฑ์
+              </button>
+            </div>
+            <div>
+              <b>สถานที่ :</b> <b>อาคาร</b> ${esc(cleanBld)}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} <b>ชั้น</b> ${esc(t.flr || '-')} <b>ห้อง/บริเวณ</b> ${esc(t.room || '-')}
+            </div>
+            <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(reporterName)}</span></div>
+            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(reporterTel)}</span></div>
+            <div><b>อีเมล :</b> <span>${esc(reporterEmail)}</span></div>
+          </div>
+
+          <!-- รายละเอียดปัญหา -->
+          <div style="margin-top:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;">
+            <b style="display:block; margin-bottom:4px; color:#0b2545; font-size:14.5px;">รายละเอียดปัญหา:</b>
+            <div style="color:#0f172a; line-height:1.6; font-size:14.5px;">${esc(descText)}</div>
+          </div>
+
+          <!-- รูปภาพตอนแจ้ง -->
+          ${photos.length ? `
+            <div style="margin-top:14px;">
+              <b style="display:block; margin-bottom:8px; color:#0b2545; font-size:14px;">📷 รูปภาพตอนแจ้ง (${photos.length} รูป):</b>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                ${photos.map(p => `
+                  <img src="${url(p)}" onclick="zoom('${p}')" style="width:80px; height:80px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:1px solid #cbd5e1;" title="คลิกดูขนาดเต็ม">
+                `).join('')}
+              </div>
+            </div>
+          ` : `
+            <div style="margin-top:10px; font-size:13.5px; color:#94a3b8;">📷 ไม่มีรูปภาพแนบตอนแจ้ง</div>
+          `}
+        </div>
+
+        <!-- Card 2: ข้อมูลการดำเนินงานของช่าง & รูปภาพตอนเสร็จสิ้น -->
+        <div style="background:#ffffff; border:1.5px solid #e2e8f0; border-radius:12px; padding:18px;">
+          <h4 style="font-size:16.5px; font-weight:800; color:#0b2545; margin:0 0 14px 0; border-bottom:1px solid #f1f5f9; padding-bottom:10px; display:flex; align-items:center; gap:8px;">
+            <span>👨‍🔧</span> การดำเนินงานของช่าง
+          </h4>
+
+          <div style="font-size:15px; line-height:1.6; margin-bottom:14px;">
+            <div><b>ช่างผู้รับผิดชอบ:</b> <span style="font-weight:700; color:#ea580c;">${esc(t.tech_name || 'ยังไม่ได้มอบหมาย')}</span></div>
+            ${t.note ? `<div style="margin-top:6px;"><b>หมายเหตุช่าง:</b> <span style="color:#0f172a;">${esc(t.note)}</span></div>` : ''}
+          </div>
+
+          <!-- รูปภาพตอนทำงานเสร็จสิ้นของช่าง -->
+          <div>
+            <b style="display:block; margin-bottom:8px; color:#0b2545; font-size:14px;">📸 รูปภาพตอนทำงานเสร็จสิ้น:</b>
+            ${donePhotos.length ? `
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                ${donePhotos.map(p => `
+                  <img src="${url(p)}" onclick="zoom('${p}')" style="width:80px; height:80px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:1px solid #cbd5e1;" title="คลิกดูขนาดเต็ม">
+                `).join('')}
+              </div>
+            ` : `
+              <div style="font-size:14px; color:#94a3b8; background:#f8fafc; padding:8px 12px; border-radius:6px; display:inline-block;">- ไม่มีรูปภาพตอนทำงานเสร็จสิ้น -</div>
+            `}
+          </div>
+
+          <!-- วัสดุอุปกรณ์ที่เบิกใช้ -->
+          ${usedMats.length ? `
+            <div style="margin-top:16px;">
+              <b style="display:block; margin-bottom:8px; color:#0b2545; font-size:14px;">📦 รายการวัสดุอุปกรณ์ที่เบิกใช้ (${usedMats.length} รายการ):</b>
+              <div class="nusp-table-wrapper">
+                <table class="nusp-table" style="font-size:13.5px;">
+                  <thead>
+                    <tr><th>ชื่อวัสดุ</th><th>จำนวน</th><th>หน่วย</th><th>ผู้เบิก</th></tr>
+                  </thead>
+                  <tbody>
+                    ${usedMats.map(u => `
+                      <tr>
+                        <td style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
+                        <td style="font-weight:800; color:#0284c7;">${u.qty}</td>
+                        <td>${esc(u.unit || 'ชิ้น')}</td>
+                        <td>${esc(u.tech_name || '-')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Card 3: การจัดการงาน (มอบหมายช่าง / อัปเดตสถานะ / ลบงาน) -->
+        <div style="background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:12px; padding:18px;">
+          <h4 style="font-size:16px; font-weight:800; color:#0b2545; margin:0 0 12px 0;">⚙️ จัดการงานซ่อม</h4>
+          
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <!-- มอบหมายช่าง -->
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <label style="font-weight:700; font-size:14px; min-width:110px;">มอบหมายช่าง:</label>
+              <select id="modal_a_${t.id}" class="form-control" style="flex:1; min-width:200px; max-width:320px; font-size:14.5px;">
+                <option value="">-- เลือกมอบหมายช่าง --</option>
+                ${techs.map(p => `<option value="${p.id}" ${p.id === t.tech_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+              </select>
+              <button type="button" class="btn btn-primary btn-sm" style="font-weight:700;" onclick="assignFromModal('${t.id}')">💾 บันทึกมอบหมาย</button>
+            </div>
+
+            <!-- ปุ่มอัปเดตสถานะ & ลบงาน -->
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:8px; border-top:1px solid #e2e8f0; padding-top:12px;">
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-outline btn-sm" style="font-weight:700; color:var(--primary); border-color:var(--primary);" onclick="openAct('${t.id}')">
+                  📝 อัปเดตสถานะงาน
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" style="font-weight:700; color:var(--danger); border-color:#cbd5e1;" onclick="delFromModal('${t.id}')">
+                  🗑️ ลบงานนี้
+                </button>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelector('#dlg').close()">
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  dlg.showModal();
+};
+
+window.assignFromModal = async function(id) {
+  const sel = document.getElementById('modal_a_' + id);
+  const v = sel ? sel.value : '', p = techs.find(x => x.id === v);
+  const t = T.find(x => x.id === id);
+  const updateData = { tech_name: p ? p.name : null };
+  if (typeof isUUID === 'function' && isUUID(v)) {
+    updateData.tech_id = v;
+  } else if (!v) {
+    updateData.tech_id = null;
+  }
+  if (v && t && t.status === 'accepted') {
+    updateData.status = 'doing';
+    updateData.history = logh(t, 'doing');
+  }
+  try {
+    await sb.from('tickets').update(updateData).eq('id', id);
+  } catch (err) {}
+  if (t) {
+    Object.assign(t, updateData);
+    if (v && !updateData.tech_id) t.tech_id = v;
+  }
+  toast(v ? `มอบหมายงานให้ ${p ? p.name : 'ช่าง'} แล้ว` : 'ยกเลิกการมอบหมายแล้ว');
+  if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();
+  $('#dlg')?.close();
+  go();
+};
+
+window.delFromModal = async function(id) {
+  if (confirm(`คุณต้องการลบใบแจ้งซ่อม ${id} หรือไม่?`)) {
+    armed = id;
+    await del(id);
+    $('#dlg')?.close();
+  }
+};
 
 window.assign = async function (id) { 
   const sel = document.getElementById('a_' + id);
@@ -594,85 +1463,412 @@ window.del = async function (id) {
   go();
 };
 
-// Screen: วัสดุที่เบิก (Stock Usage & CSV export)
+// ==========================================================================
+// Screen: วัสดุที่เบิกใช้ (Stock Usage & Analytics Dashboard - ออกแบบตามรูปภาพต้นแบบ)
+// ==========================================================================
+let stockYear = 'all';
+let stockMonth = 'all';
+let stockTech = '';
+let stockSearch = '';
+
+window.setStockYear = function(y) { stockYear = y; render(); };
+window.setStockMonth = function(m) { stockMonth = m; render(); };
+window.setStockTech = function(t) { stockTech = t; render(); };
+window.setStockSearch = function(q) { stockSearch = (q || '').trim(); render(); };
+window.resetStockSearch = function() { stockSearch = ''; render(); };
+window.resetStockPeriod = function() { stockYear = 'all'; stockMonth = 'all'; stockTech = ''; stockSearch = ''; render(); };
+
+const MAT_CAT_MAP = {
+  'สายไฟ VCT': { cat: 'วัสดุไฟฟ้า', price: 45, unit: 'เมตร', color: '#3b82f6' },
+  'สายไฟ': { cat: 'วัสดุไฟฟ้า', price: 45, unit: 'เมตร', color: '#3b82f6' },
+  'เบรกเกอร์': { cat: 'วัสดุไฟฟ้า', price: 350, unit: 'ตัว', color: '#3b82f6' },
+  'หลอดไฟ LED': { cat: 'วัสดุไฟฟ้า', price: 150, unit: 'หลอด', color: '#3b82f6' },
+  'บัลลาสต์/สตาร์ทเตอร์': { cat: 'วัสดุไฟฟ้า', price: 80, unit: 'ตัว', color: '#3b82f6' },
+  'สวิตช์ไฟ': { cat: 'วัสดุไฟฟ้า', price: 120, unit: 'ตัว', color: '#3b82f6' },
+  'ปลั๊กไฟ': { cat: 'วัสดุไฟฟ้า', price: 90, unit: 'ตัว', color: '#3b82f6' },
+  'เทปพันสายไฟ': { cat: 'วัสดุไฟฟ้า', price: 35, unit: 'ม้วน', color: '#3b82f6' },
+  'ท่อ PVC': { cat: 'วัสดุก่อสร้าง', price: 65, unit: 'เส้น', color: '#f97316' },
+  'ปูนซีเมนต์': { cat: 'วัสดุก่อสร้าง', price: 160, unit: 'ถุง', color: '#f97316' },
+  'สีทาภายใน': { cat: 'วัสดุก่อสร้าง', price: 450, unit: 'ถัง', color: '#f97316' },
+  'ก๊อกน้ำ': { cat: 'วัสดุประปา', price: 180, unit: 'ตัว', color: '#10b981' },
+  'วาล์วน้ำ': { cat: 'วัสดุประปา', price: 120, unit: 'ตัว', color: '#10b981' },
+  'สายฉีดชำระ': { cat: 'วัสดุประปา', price: 160, unit: 'ชุด', color: '#10b981' },
+  'น้ำยาแอร์': { cat: 'วัสดุอื่นๆ', price: 450, unit: 'กก.', color: '#8b5cf6' }
+};
+
+function getMatInfo(name) {
+  if (MAT_CAT_MAP[name]) return MAT_CAT_MAP[name];
+  if (/ไฟ|หลอด|เบรกเกอร์|สวิตช์|ปลั๊ก|สายไฟ|บัลลาสต์/i.test(name)) return { cat: 'วัสดุไฟฟ้า', price: 120, unit: 'ชิ้น', color: '#3b82f6' };
+  if (/ท่อ|ก๊อก|วาล์ว|ชำระ|ประปา|น้ำ/i.test(name)) return { cat: 'วัสดุประปา', price: 95, unit: 'ชิ้น', color: '#10b981' };
+  if (/ปูน|สี|ฝ้า|ไม้|ประตู|หน้าต่าง|กระจก|กระเบื้อง/i.test(name)) return { cat: 'วัสดุก่อสร้าง', price: 200, unit: 'ชิ้น', color: '#f97316' };
+  return { cat: 'วัสดุอื่นๆ', price: 100, unit: 'ชิ้น', color: '#8b5cf6' };
+}
+
 function vStock() {
-  const r = fT ? U.filter(u => u.tech_name === fT) : U, tn = [...new Set(U.map(u => u.tech_name).filter(Boolean))], tot = {}, byT = {};
-  r.forEach(u => { 
-    const k = u.name + ' (' + (u.unit || 'ชิ้น') + ')'; 
-    const q = Number(u.qty) || 0; 
-    tot[k] = (tot[k] || 0) + q; 
-    if (u.tech_name) (byT[u.tech_name] ??= {})[k] = (byT[u.tech_name][k] || 0) + q;
+  const allUsage = [...(U || [])];
+
+  // 1. เรียงลำดับจากวันที่ใหม่สุดอยู่บน (Sort descending by date)
+  allUsage.sort((a, b) => {
+    const tA = new Date(a.created_at || a.date || 0).getTime();
+    const tB = new Date(b.created_at || b.date || 0).getTime();
+    return tB - tA;
+  });
+
+  // รวบรวมรายชื่อปีและช่าง
+  const yearSet = new Set();
+  const techSet = new Set();
+  allUsage.forEach(u => {
+    const d = new Date(u.created_at || u.date || 0);
+    if (!isNaN(d.getTime())) yearSet.add(d.getFullYear());
+    if (u.tech_name) techSet.add(u.tech_name);
+  });
+  if (!yearSet.size) yearSet.add(new Date().getFullYear());
+  const sortedYears = Array.from(yearSet).sort((a, b) => b - a);
+  const techList = Array.from(techSet).sort();
+
+  const thaiMonths = [
+    { num: '01', name: 'มกราคม' },
+    { num: '02', name: 'กุมภาพันธ์' },
+    { num: '03', name: 'มีนาคม' },
+    { num: '04', name: 'เมษายน' },
+    { num: '05', name: 'พฤษภาคม' },
+    { num: '06', name: 'มิถุนายน' },
+    { num: '07', name: 'กรกฎาคม' },
+    { num: '08', name: 'สิงหาคม' },
+    { num: '09', name: 'กันยายน' },
+    { num: '10', name: 'ตุลาคม' },
+    { num: '11', name: 'พฤศจิกายน' },
+    { num: '12', name: 'ธันวาคม' }
+  ];
+
+  // กรองตามปี เดือน ช่าง และเลขที่ใบซ่อม
+  const isPeriodFiltered = stockYear !== 'all' || stockMonth !== 'all' || stockTech !== '' || stockSearch !== '';
+  const filteredUsage = allUsage.filter(u => {
+    const d = new Date(u.created_at || u.date || 0);
+    if (stockYear !== 'all' && !isNaN(d.getTime()) && d.getFullYear() !== Number(stockYear)) return false;
+    if (stockMonth !== 'all' && !isNaN(d.getTime())) {
+      const mStr = String(d.getMonth() + 1).padStart(2, '0');
+      if (mStr !== stockMonth) return false;
+    }
+    if (stockTech && u.tech_name !== stockTech) return false;
+    if (stockSearch) {
+      const sq = stockSearch.toLowerCase();
+      const matchTicket = (u.ticket_id || '').toLowerCase().includes(sq);
+      const matchMat = (u.name || '').toLowerCase().includes(sq);
+      const matchTech = (u.tech_name || '').toLowerCase().includes(sq);
+      if (!matchTicket && !matchMat && !matchTech) return false;
+    }
+    return true;
+  });
+
+  // คำนวณสรุปสถิติ & สัดส่วนงบประมาณ
+  let totalCost = 0;
+  const catBreakdown = {
+    'วัสดุไฟฟ้า': 0,
+    'วัสดุก่อสร้าง': 0,
+    'วัสดุประปา': 0,
+    'วัสดุอื่นๆ': 0
+  };
+  const activeTechs = new Set();
+
+  filteredUsage.forEach(u => {
+    const info = getMatInfo(u.name);
+    const qty = Number(u.qty) || 1;
+    const cost = u.cost ? Number(u.cost) : (qty * info.price);
+    totalCost += cost;
+    catBreakdown[info.cat] = (catBreakdown[info.cat] || 0) + cost;
+    if (u.tech_name) activeTechs.add(u.tech_name);
+  });
+
+  // หาค่าสูงสุดสำหรับความสูงของ Bar chart
+  const maxCatCost = Math.max(...Object.values(catBreakdown), 1);
+
+  // คำนวณเปอร์เซ็นต์สำหรับ Donut chart
+  const catColors = {
+    'วัสดุไฟฟ้า': '#3b82f6',
+    'วัสดุก่อสร้าง': '#f97316',
+    'วัสดุประปา': '#10b981',
+    'วัสดุอื่นๆ': '#8b5cf6'
+  };
+
+  const catPercentages = {};
+  Object.keys(catBreakdown).forEach(k => {
+    catPercentages[k] = totalCost > 0 ? ((catBreakdown[k] / totalCost) * 100).toFixed(1) : 0;
   });
 
   return `
-    <div class="content-card">
-      <div class="card-header-row" style="flex-wrap:wrap; gap:10px; margin-bottom:16px;">
-        <h2 style="font-size:20px; font-weight:800; display:flex; align-items:center; gap:8px;">
-          <span>📦</span> รายการวัสดุที่เบิกใช้
-        </h2>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <select class="form-control" style="width:auto; font-size:15px; font-weight:700; min-height:44px;" onchange="setFT(this.value)">
+    <div style="max-width:1200px; margin:0 auto;">
+      <!-- Header Bar สไตล์รูปภาพต้นแบบ -->
+      <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:18px; padding:20px 24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div style="background:linear-gradient(135deg, #ea580c 0%, #f97316 100%); width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:28px; box-shadow:0 4px 12px rgba(234,88,12,0.25);">
+            📦
+          </div>
+          <div>
+            <h2 style="font-size:24px; font-weight:800; color:#0b2545; margin:0 0 4px 0;">วัสดุที่เบิกใช้</h2>
+            <div style="font-size:14.5px; color:#64748b; font-weight:500;">สรุปการเบิกวัสดุ และรายละเอียดการเบิกใช้งาน</div>
+          </div>
+        </div>
+
+        <!-- Filter Period & Actions ด้านขวา -->
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:6px; background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:10px; padding:4px 8px;">
+            <span style="font-size:14px;">📅</span>
+            <select style="border:none; background:transparent; font-size:14px; font-weight:700; color:#0b2545; outline:none; cursor:pointer;" onchange="setStockYear(this.value)">
+              <option value="all" ${stockYear === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
+              ${sortedYears.map(y => `<option value="${y}" ${String(stockYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>`).join('')}
+            </select>
+
+            <span style="color:#cbd5e1;">|</span>
+
+            <select style="border:none; background:transparent; font-size:14px; font-weight:700; color:#0b2545; outline:none; cursor:pointer;" onchange="setStockMonth(this.value)">
+              <option value="all" ${stockMonth === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
+              ${thaiMonths.map(m => `<option value="${m.num}" ${stockMonth === m.num ? 'selected' : ''}>${m.name}</option>`).join('')}
+            </select>
+          </div>
+
+          <select class="form-control" style="font-size:14px; font-weight:700; height:42px; border-radius:10px; min-width:130px;" onchange="setStockTech(this.value)">
             <option value="">ช่างทั้งหมด</option>
-            ${tn.map(x => `<option ${x === fT ? 'selected' : ''}>${esc(x)}</option>`).join('')}
+            ${techList.map(x => `<option value="${x}" ${x === stockTech ? 'selected' : ''}>${esc(x)}</option>`).join('')}
           </select>
-          <button class="btn btn-primary btn-sm" onclick="csv()" style="white-space:nowrap;">📥 ดาวน์โหลด CSV</button>
+
+          ${isPeriodFiltered ? `
+            <button type="button" class="btn btn-outline btn-sm" style="height:42px; font-size:13px; border-radius:10px;" onclick="resetStockPeriod()">
+              ✕ รีเซ็ต
+            </button>
+          ` : ''}
+
+          <button class="btn btn-primary btn-sm" onclick="csv()" style="white-space:nowrap; height:42px; font-size:14px; font-weight:700; border-radius:10px; padding:0 14px;">
+            📥 ส่งออก CSV
+          </button>
         </div>
       </div>
 
-      <!-- สรุปยอด: stack เป็น 1 คอลัมน์บนมือถือ -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; margin-bottom:20px;">
-        <div class="chart-card">
-          <div class="chart-header" style="font-size:16px;">สรุปยอดตามชนิดวัสดุ</div>
-          <div class="nusp-table-wrapper">
-            <table class="nusp-table">
-              <thead><tr><th>วัสดุ (หน่วย)</th><th>จำนวนรวม</th></tr></thead>
-              <tbody>
-                ${Object.entries(tot).map(([k, v]) => `<tr><td>${esc(k)}</td><td style="font-weight:700; color:var(--primary);">${v}</td></tr>`).join('') || '<tr><td colspan="2" class="mut" style="text-align:center;padding:16px;">ยังไม่มีรายการ</td></tr>'}
-              </tbody>
-            </table>
+      <!-- ส่วนที่ 1: 3 Stat KPI Cards (ตามรูปภาพ) -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; margin-bottom:20px;">
+        <!-- Card 1: รายการที่เบิกทั้งหมด (สีน้ำเงิน) -->
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:22px; display:flex; align-items:center; gap:18px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+          <div style="background:#eff6ff; color:#2563eb; width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px;">
+            📋
+          </div>
+          <div>
+            <div style="font-size:14px; font-weight:700; color:#64748b;">รายการที่เบิกทั้งหมด</div>
+            <div style="font-size:28px; font-weight:800; color:#0b2545; margin-top:2px;">
+              ${filteredUsage.length} <span style="font-size:16px; font-weight:600; color:#64748b;">รายการ</span>
+            </div>
           </div>
         </div>
 
-        <div class="chart-card">
-          <div class="chart-header" style="font-size:16px;">สรุปตามช่างผู้เบิก</div>
-          <div class="nusp-table-wrapper">
-            <table class="nusp-table">
-              <thead><tr><th>ช่าง</th><th>รายการ</th></tr></thead>
-              <tbody>
-                ${Object.entries(byT).map(([t, m]) => `<tr><td style="font-weight:600;">${esc(t)}</td><td>${Object.entries(m).map(([n, v]) => esc(n) + ' × ' + v).join('<br>')}</td></tr>`).join('') || '<tr><td colspan="2" class="mut" style="text-align:center;padding:16px;">ยังไม่มีรายการ</td></tr>'}
-              </tbody>
-            </table>
+        <!-- Card 2: ยอดเบิกใช้ทั้งหมด (สีม่วง) -->
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:22px; display:flex; align-items:center; gap:18px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+          <div style="background:#f5f3ff; color:#7c3aed; width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px;">
+            🔧
+          </div>
+          <div>
+            <div style="font-size:14px; font-weight:700; color:#64748b;">ยอดเบิกใช้ทั้งหมด</div>
+            <div style="font-size:28px; font-weight:800; color:#0b2545; margin-top:2px;">
+              ฿${totalCost.toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: ผู้เบิกทั้งหมด (สีเขียว) -->
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:22px; display:flex; align-items:center; gap:18px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+          <div style="background:#f0fdf4; color:#16a34a; width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px;">
+            👤
+          </div>
+          <div>
+            <div style="font-size:14px; font-weight:700; color:#64748b;">ผู้เบิกทั้งหมด</div>
+            <div style="font-size:28px; font-weight:800; color:#0b2545; margin-top:2px;">
+              ${activeTechs.size} <span style="font-size:16px; font-weight:600; color:#64748b;">คน</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ตารางรายละเอียดทั้งหมด -->
-      <div style="font-weight:700; font-size:16px; margin-bottom:10px; color:var(--text-main);">📋 รายการเบิกทั้งหมด (${r.length} รายการ)</div>
-      <div class="nusp-table-wrapper">
-        <table class="nusp-table">
-          <thead>
-            <tr><th>วันที่</th><th>ช่าง</th><th>เลขที่ใบงาน</th><th>วัสดุ</th><th>จำนวน</th></tr>
-          </thead>
-          <tbody>
-            ${r.map(u => `
+      <!-- ส่วนที่ 2: Middle Section (2 Charts ตามรูปภาพต้นแบบ) -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:18px; margin-bottom:22px;">
+        <!-- Chart 1: ยอดเบิกใช้ตามหมวดหมู่ (Bar Chart) -->
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:22px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:17px; font-weight:800; color:#0b2545; margin:0; display:flex; align-items:center; gap:8px;">
+              <span>📊</span> ยอดเบิกใช้ตามหมวดหมู่
+            </h3>
+          </div>
+
+          <!-- Vertical Bars Visualization -->
+          <div style="height:210px; display:flex; align-items:flex-end; justify-content:space-around; gap:14px; border-bottom:1.5px solid #e2e8f0; padding-bottom:8px; margin-bottom:12px;">
+            ${Object.entries(catBreakdown).map(([cat, cost]) => {
+              const heightPct = maxCatCost > 0 ? Math.max((cost / maxCatCost) * 160, cost > 0 ? 18 : 6) : 6;
+              const color = catColors[cat];
+              return `
+                <div style="display:flex; flex-direction:column; align-items:center; flex:1; max-width:85px;">
+                  <span style="font-size:12.5px; font-weight:800; color:#0b2545; margin-bottom:6px; white-space:nowrap;">
+                    ${cost > 0 ? `฿${cost.toLocaleString()}` : '-'}
+                  </span>
+                  <div style="width:100%; height:${heightPct}px; background:${color}; border-radius:8px 8px 0 0; transition:all 0.3s ease; box-shadow:0 2px 6px ${color}33;"></div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <div style="display:flex; justify-content:space-around; gap:8px; text-align:center;">
+            ${Object.keys(catBreakdown).map(cat => `
+              <div style="flex:1; max-width:85px; font-size:12.5px; font-weight:700; color:#475569;">
+                ${esc(cat)}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Chart 2: สัดส่วนการเบิกตามหมวดหมู่ (Doughnut Chart) -->
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:22px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:17px; font-weight:800; color:#0b2545; margin:0; display:flex; align-items:center; gap:8px;">
+              <span>🎯</span> สัดส่วนการเบิกตามหมวดหมู่
+            </h3>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-around; gap:20px; flex-wrap:wrap; min-height:210px;">
+            <!-- Circular Donut SVG -->
+            <div style="position:relative; width:170px; height:170px; display:flex; align-items:center; justify-content:center;">
+              <svg width="170" height="170" viewBox="0 0 100 100" style="transform:rotate(-90deg);">
+                <circle cx="50" cy="50" r="38" fill="none" stroke="#f1f5f9" stroke-width="14" />
+                ${(() => {
+                  if (totalCost <= 0) return '';
+                  let accOffset = 0;
+                  const circumference = 2 * Math.PI * 38; // ~238.76
+                  return Object.entries(catBreakdown).map(([cat, cost]) => {
+                    const pct = cost / totalCost;
+                    const strokeLen = pct * circumference;
+                    const strokeDasharray = `${strokeLen} ${circumference - strokeLen}`;
+                    const strokeDashoffset = -accOffset;
+                    accOffset += strokeLen;
+                    return `
+                      <circle cx="50" cy="50" r="38" fill="none" stroke="${catColors[cat]}" stroke-width="14" stroke-dasharray="${strokeDasharray}" stroke-dashoffset="${strokeDashoffset}" />
+                    `;
+                  }).join('');
+                })()}
+              </svg>
+              <!-- Center Total Text -->
+              <div style="position:absolute; text-align:center; padding:0 8px;">
+                <div style="font-size:16px; font-weight:800; color:#0b2545;">฿${totalCost.toLocaleString()}</div>
+                <div style="font-size:11.5px; color:#64748b; font-weight:600;">รวมทั้งหมด</div>
+              </div>
+            </div>
+
+            <!-- Legend with percentages -->
+            <div style="display:flex; flex-direction:column; gap:10px; min-width:140px;">
+              ${Object.entries(catBreakdown).map(([cat, cost]) => `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13.5px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="width:10px; height:10px; border-radius:50%; background:${catColors[cat]};"></span>
+                    <span style="font-weight:600; color:#334155;">${esc(cat)}</span>
+                  </div>
+                  <b style="color:#0b2545; font-size:14px;">${catPercentages[cat]}%</b>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ส่วนที่ 3: ตารางรายการวัสดุที่เบิก (เรียงวันที่ใหม่สุดอยู่บน ตามที่ระบุ) -->
+      <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:22px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+          <h3 style="font-size:18px; font-weight:800; color:#0b2545; margin:0; display:flex; align-items:center; gap:8px;">
+            <span>📋</span> รายการวัสดุที่เบิก <span style="font-size:14px; font-weight:600; color:#64748b;">(จัดเรียงตามวันที่ใหม่ล่าสุด)</span>
+          </h3>
+
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <!-- ช่องค้นหาเลขใบซ่อมในหน้าวัสดุ -->
+            <div style="position:relative; min-width:240px;">
+              <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#64748b; font-size:14px;">🔍</span>
+              <input type="text" class="form-control" placeholder="ค้นหาด้วยเลขใบซ่อม เช่น REP-..." value="${esc(stockSearch)}" oninput="setStockSearch(this.value)" style="padding-left:36px; padding-right:30px; height:38px; font-size:13.5px; border-radius:8px; border:1.5px solid #cbd5e1; background:#ffffff;">
+              ${stockSearch ? `
+                <button type="button" onclick="resetStockSearch()" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; font-size:16px; cursor:pointer;" title="ล้างการค้นหา">&times;</button>
+              ` : ''}
+            </div>
+
+            <span class="badge badge-done" style="font-size:13.5px; font-weight:700;">
+              แสดง ${filteredUsage.length} รายการ
+            </span>
+          </div>
+        </div>
+
+        ${stockSearch ? `
+          <div style="margin-top:-6px; margin-bottom:14px; font-size:14px; color:#ea580c; font-weight:700; display:flex; align-items:center; gap:6px;">
+            <span>🔍</span> ผลการค้นหาเลขใบซ่อม "${esc(stockSearch)}": พบ <b>${filteredUsage.length}</b> รายการ
+          </div>
+        ` : ''}
+
+        <div class="nusp-table-wrapper">
+          <table class="nusp-table">
+            <thead>
               <tr>
-                <td style="color:var(--text-muted); font-size:14px; white-space:nowrap;">${fmt(u.created_at)}</td>
-                <td style="font-weight:600; white-space:nowrap;">${esc(u.tech_name)}</td>
-                <td style="font-weight:700; color:var(--primary); white-space:nowrap;">${esc(u.ticket_id)}</td>
-                <td>${esc(u.name)}</td>
-                <td style="font-weight:700; white-space:nowrap;">${u.qty} ${esc(u.unit || 'ชิ้น')}</td>
+                <th style="min-width:130px;">วันที่</th>
+                <th style="min-width:140px;">ชื่อช่าง</th>
+                <th style="min-width:130px;">เลขซ่อม</th>
+                <th style="min-width:180px;">รายการวัสดุ</th>
+                <th style="min-width:90px; text-align:center;">จำนวน</th>
+                <th style="min-width:110px; text-align:right;">งบประมาณ</th>
               </tr>
-            `).join('') || '<tr><td colspan="5" class="mut" style="text-align:center; padding:24px;">ยังไม่มีการเบิกวัสดุ</td></tr>'}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${filteredUsage.length ? filteredUsage.map(u => {
+                const info = getMatInfo(u.name);
+                const qty = Number(u.qty) || 1;
+                const cost = u.cost ? Number(u.cost) : (qty * info.price);
+                const dateStr = u.created_at ? fmt(u.created_at) : (u.date || '-');
+
+                return `
+                  <tr>
+                    <td style="color:#64748b; font-size:14px; white-space:nowrap;">
+                      🕒 ${esc(dateStr)}
+                    </td>
+                    <td style="font-weight:700; color:#0b2545; white-space:nowrap;">
+                      👨‍🔧 ${esc(u.tech_name || 'ช่างซ่อมบำรุง')}
+                    </td>
+                    <td style="font-weight:800; font-family:monospace; color:#ea580c; white-space:nowrap;">
+                      ${esc(u.ticket_id || '-')}
+                    </td>
+                    <td style="font-weight:700; color:#0f172a;">
+                      ${esc(u.name)}
+                      <span style="font-size:11.5px; margin-left:6px; color:${info.color}; background:${info.color}15; padding:1px 6px; border-radius:4px; font-weight:600;">
+                        ${esc(info.cat)}
+                      </span>
+                    </td>
+                    <td style="font-weight:800; color:#0284c7; white-space:nowrap; text-align:center;">
+                      ${qty} ${esc(u.unit || info.unit)}
+                    </td>
+                    <td style="font-weight:800; color:#15803d; white-space:nowrap; text-align:right;">
+                      ฿${cost.toLocaleString()}
+                    </td>
+                  </tr>
+                `;
+              }).join('') : `
+                <tr>
+                  <td colspan="6" class="mut" style="text-align:center; padding:36px; font-size:15.5px;">
+                    ไม่พบรายการเบิกวัสดุตามช่วงเวลาหรือเงื่อนไขที่เลือก
+                  </td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   `;
 }
 
 window.csv = function () {
-  const c = s => '"' + String(s ?? '').replace(/"/g, '""') + '"', r = fT ? U.filter(u => u.tech_name === fT) : U;
-  const txt = '\uFEFFวันที่,ช่าง,ใบงาน,วัสดุ,จำนวน,หน่วย\n' + r.map(u => [fmt(u.created_at), u.tech_name, u.ticket_id, u.name, u.qty, u.unit || 'ชิ้น'].map(c).join(',')).join('\n');
+  const c = s => '"' + String(s ?? '').replace(/"/g, '""') + '"', r = stockTech ? U.filter(u => u.tech_name === stockTech) : U;
+  const txt = '\uFEFFวันที่,ชื่อช่าง,เลขซ่อม,รายการวัสดุ,จำนวน,หน่วย,งบประมาณ\n' + r.map(u => {
+    const info = getMatInfo(u.name);
+    const qty = Number(u.qty) || 1;
+    const cost = u.cost ? Number(u.cost) : (qty * info.price);
+    return [fmt(u.created_at), u.tech_name, u.ticket_id, u.name, u.qty, u.unit || info.unit, cost].map(c).join(',');
+  }).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv' })); a.download = 'material-usage.csv'; a.click();
 };
 
@@ -682,6 +1878,25 @@ window.csv = function () {
 let assetSearchKeyword = '';
 window.assetSearchKeyword = assetSearchKeyword;
 
+let assetHistoryYear = 'all';
+let assetHistoryMonth = 'all';
+
+window.setAssetHistoryYear = function(y) {
+  assetHistoryYear = y;
+  render();
+};
+
+window.setAssetHistoryMonth = function(m) {
+  assetHistoryMonth = m;
+  render();
+};
+
+window.resetAssetHistoryPeriod = function() {
+  assetHistoryYear = 'all';
+  assetHistoryMonth = 'all';
+  render();
+};
+
 window.searchAsset = function(val) {
   assetSearchKeyword = (val || '').trim();
   render();
@@ -689,6 +1904,8 @@ window.searchAsset = function(val) {
 
 window.resetAssetSearch = function() {
   assetSearchKeyword = '';
+  assetHistoryYear = 'all';
+  assetHistoryMonth = 'all';
   render();
 };
 
@@ -707,6 +1924,30 @@ function vAssetCheck() {
       });
     }
   });
+
+  // รวบรวมรายชื่อปีที่มีในระบบ
+  const yearSet = new Set();
+  allTickets.forEach(t => {
+    const d = getAdminTicketDateObj(t);
+    if (d) yearSet.add(d.getFullYear());
+  });
+  if (!yearSet.size) yearSet.add(new Date().getFullYear());
+  const sortedYears = Array.from(yearSet).sort((a, b) => b - a);
+
+  const thaiMonths = [
+    { num: '01', name: 'มกราคม' },
+    { num: '02', name: 'กุมภาพันธ์' },
+    { num: '03', name: 'มีนาคม' },
+    { num: '04', name: 'เมษายน' },
+    { num: '05', name: 'พฤษภาคม' },
+    { num: '06', name: 'มิถุนายน' },
+    { num: '07', name: 'กรกฎาคม' },
+    { num: '08', name: 'สิงหาคม' },
+    { num: '09', name: 'กันยายน' },
+    { num: '10', name: 'ตุลาคม' },
+    { num: '11', name: 'พฤศจิกายน' },
+    { num: '12', name: 'ธันวาคม' }
+  ];
 
   // รวบรวมหมายเลขครุภัณฑ์ที่มีทั้งหมดในระบบ
   const assetMap = new Map();
@@ -731,27 +1972,48 @@ function vAssetCheck() {
     };
   });
 
-  let searchResults = null;
+  let rawSearchResults = null;
   const hasSearched = Boolean(assetSearchKeyword);
 
   if (hasSearched) {
     const cleanKey = assetSearchKeyword.toLowerCase();
-    searchResults = allTickets.filter(t => {
+    rawSearchResults = allTickets.filter(t => {
       const a = (t.items?.[0]?.asset || t.asset_no || t.asset || '').trim().toLowerCase();
       return a && (a === cleanKey || a.includes(cleanKey));
     });
   }
 
+  // กรอง searchResults ตามตัวเลือก ปี และ เดือน
+  const isPeriodFiltered = assetHistoryYear !== 'all' || assetHistoryMonth !== 'all';
+  let searchResults = rawSearchResults || [];
+
+  if (rawSearchResults && rawSearchResults.length > 0) {
+    if (assetHistoryYear !== 'all') {
+      searchResults = searchResults.filter(t => {
+        const d = getAdminTicketDateObj(t);
+        return d && d.getFullYear() === Number(assetHistoryYear);
+      });
+    }
+    if (assetHistoryMonth !== 'all') {
+      searchResults = searchResults.filter(t => {
+        const d = getAdminTicketDateObj(t);
+        if (!d) return false;
+        const mStr = String(d.getMonth() + 1).padStart(2, '0');
+        return mStr === assetHistoryMonth;
+      });
+    }
+  }
+
   // คำนวณสรุปข้อมูลหากพบประวัติ
   let assetSummary = null;
-  if (searchResults && searchResults.length > 0) {
-    searchResults.sort((a, b) => {
+  if (rawSearchResults && rawSearchResults.length > 0) {
+    rawSearchResults.sort((a, b) => {
       const tA = new Date(a.created_at || a.done_at || 0).getTime();
       const tB = new Date(b.created_at || b.done_at || 0).getTime();
       return tB - tA;
     });
 
-    const first = searchResults[0];
+    const first = rawSearchResults[0];
     const matchedAssetCode = first.items?.[0]?.asset || first.asset_no || first.asset || assetSearchKeyword;
     const equipName = (typeof getTicketTitle === 'function' ? getTicketTitle(first) : (first.items?.[0]?.item || first.title || first.sub_type || first.cat || 'ครุภัณฑ์'));
     const totalBudget = searchResults.reduce((sum, t) => sum + (Number(t.budget || t.cost || 0)), 0);
@@ -765,6 +2027,7 @@ function vAssetCheck() {
       cat: first.cat || first.sub_type || 'ทั่วไป',
       location: `อาคาร ${first.bld || '-'} ชั้น ${first.flr || '-'} (ห้อง/บริเวณ ${first.room || '-'})`,
       repairsCount: searchResults.length,
+      allTimeCount: rawSearchResults.length,
       totalBudget: totalBudget,
       techs: allTechs.length ? allTechs.join(', ') : 'ช่างซ่อมบำรุง',
       materials: usedMats
@@ -817,8 +2080,31 @@ function vAssetCheck() {
 
       <!-- ผลลัพธ์การค้นหา -->
       ${hasSearched ? (
-        searchResults && searchResults.length > 0 ? `
+        rawSearchResults && rawSearchResults.length > 0 ? `
           <!-- พบคลังข้อมูลครุภัณฑ์ -->
+          <!-- แถวบน: ปุ่มย้อนกลับ + ตัวกรองเลือกดูรายปีและรายเดือน -->
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+            <button type="button" class="btn btn-outline" style="font-size:14.5px; font-weight:700; border-radius:10px; display:inline-flex; align-items:center; gap:6px; color:#0b2545; border:1.5px solid #cbd5e1; background:#ffffff; padding:8px 18px;" onclick="resetAssetSearch()">
+              ← ย้อนกลับไปหน้ารายการครุภัณฑ์
+            </button>
+
+            <!-- ตัวกรองช่วงเวลา ปี/เดือน ของประวัติครุภัณฑ์ -->
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#f8fafc; border:1.5px solid #cbd5e1; padding:6px 12px; border-radius:10px;">
+              <span style="font-size:13.5px; font-weight:700; color:#0b2545;">🗓️ ช่วงเวลา:</span>
+              <button type="button" class="btn ${!isPeriodFiltered ? 'btn-primary' : 'btn-outline'} btn-sm" style="font-size:13px; padding:4px 10px;" onclick="resetAssetHistoryPeriod()">
+                ทั้งหมด (${assetSummary.allTimeCount})
+              </button>
+              <select class="form-control" style="height:36px; font-size:13.5px; font-weight:700; min-width:125px; padding:2px 8px;" onchange="setAssetHistoryYear(this.value)">
+                <option value="all" ${assetHistoryYear === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
+                ${sortedYears.map(y => `<option value="${y}" ${String(assetHistoryYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>`).join('')}
+              </select>
+              <select class="form-control" style="height:36px; font-size:13.5px; font-weight:700; min-width:130px; padding:2px 8px;" onchange="setAssetHistoryMonth(this.value)">
+                <option value="all" ${assetHistoryMonth === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
+                ${thaiMonths.map(m => `<option value="${m.num}" ${assetHistoryMonth === m.num ? 'selected' : ''}>${m.name}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
           <!-- 1. การ์ดสรุปข้อมูลครุภัณฑ์ -->
           <div style="background:#ffffff; border:1.5px solid #fed7aa; border-radius:14px; padding:20px; margin-bottom:20px; box-shadow:0 4px 12px rgba(234,88,12,0.06);">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; border-bottom:1px solid #fed7aa; padding-bottom:14px; margin-bottom:16px;">
@@ -834,7 +2120,7 @@ function vAssetCheck() {
                 </div>
               </div>
               <span class="badge badge-done" style="font-size:15px; padding:6px 14px;">
-                พบประวัติการซ่อม ${assetSummary.repairsCount} ครั้ง
+                พบประวัติการซ่อม ${assetSummary.repairsCount} ครั้ง ${isPeriodFiltered ? `(จากทั้งหมด ${assetSummary.allTimeCount} ครั้ง)` : ''}
               </span>
             </div>
 
@@ -888,7 +2174,7 @@ function vAssetCheck() {
                     </tr>
                   `).join('') : `
                     <tr>
-                      <td colspan="5" style="text-align:center; padding:24px; color:#64748b;">ไม่มีประวัติการเบิกวัสดุสำหรับครุภัณฑ์นี้</td>
+                      <td colspan="5" style="text-align:center; padding:24px; color:#64748b;">ไม่มีประวัติการเบิกวัสดุสำหรับครุภัณฑ์นี้ในช่วงเวลาที่เลือก</td>
                     </tr>
                   `}
                 </tbody>
@@ -903,7 +2189,7 @@ function vAssetCheck() {
             </h4>
 
             <div style="display:flex; flex-direction:column; gap:16px;">
-              ${searchResults.map((t, idx) => {
+              ${searchResults.length ? searchResults.map((t, idx) => {
                 const ticketMats = (typeof U !== 'undefined' ? U : []).filter(u => u.ticket_id === t.id);
                 const reqDate = t.date || (t.created_at ? fmt(t.created_at) : '-');
                 const doneDate = t.done_at ? fmt(t.done_at) : (t.status === 'done' || t.status === 'closed' ? 'เสร็จสิ้นแล้ว' : 'กำลังดำเนินการ');
@@ -957,7 +2243,14 @@ function vAssetCheck() {
                     </div>
                   </div>
                 `;
-              }).join('')}
+              }).join('') : `
+                <div style="text-align:center; padding:32px 16px; color:#64748b; background:#f8fafc; border-radius:10px;">
+                  ไม่พบรายการซ่อมสำหรับครุภัณฑ์นี้ในช่วงเวลาที่เลือก
+                  <div style="margin-top:8px;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="resetAssetHistoryPeriod()">แสดงทุกช่วงเวลา</button>
+                  </div>
+                </div>
+              `}
             </div>
           </div>
         ` : `
@@ -971,8 +2264,8 @@ function vAssetCheck() {
               ไม่พบประวัติการแจ้งซ่อม หรือไม่มีข้อมูลการซ่อมบำรุงสำหรับหมายเลขครุภัณฑ์ 
               <b style="color:#0b2545; font-family:monospace; background:#fee2e2; padding:2px 8px; border-radius:4px;">"${esc(assetSearchKeyword)}"</b> ในระบบ
             </p>
-            <button type="button" class="btn btn-outline" style="min-width:140px; font-weight:700;" onclick="resetAssetSearch()">
-              ล้างการค้นหา
+            <button type="button" class="btn btn-outline" style="min-width:180px; font-weight:700; border-radius:8px;" onclick="resetAssetSearch()">
+              ← ย้อนกลับไปหน้ารายการครุภัณฑ์
             </button>
           </div>
         `
