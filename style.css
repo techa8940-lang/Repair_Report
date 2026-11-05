@@ -2744,3 +2744,204 @@ dialog#dlg.act-dialog-wide {
   margin-top: 24px;
   flex-wrap: wrap;
 }
+
+
+/* ==========================================================================
+   Top Process Stepper Filter Bar (งานของฉัน / ลำดับการทำงานขึ้นไปด้านบน)
+   ========================================================================== */
+.mine-stepper-filter-card {
+  background: #ffffff;
+  border: 1.5px solid #fed7aa;
+  border-radius: 16px;
+  padding: 16px 14px;
+  margin-bottom: 22px;
+  box-shadow: 0 4px 14px rgba(234, 88, 12, 0.06);
+}
+
+.mine-stepper-filter-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0b2545;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mine-stepper-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.mine-step-filter-btn {
+  flex: 1;
+  min-width: 110px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.mine-step-filter-btn:hover {
+  border-color: #ea580c;
+  background: #fffaf0;
+  transform: translateY(-2px);
+}
+
+.mine-step-filter-btn.active {
+  border-color: #ea580c;
+  background: #fff7ed;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.22);
+}
+
+.mine-step-circle-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  transition: all 0.2s ease;
+}
+
+/* สีส้มสดใสตามภาพต้นฉบับของผู้ใช้ */
+.mine-step-circle-badge.orange-badge {
+  background: #ea580c;
+  color: #ffffff;
+  box-shadow: 0 0 0 4px #ffedd5;
+}
+
+.mine-step-circle-badge.gray-badge {
+  background: #cbd5e1;
+  color: #334155;
+}
+
+.mine-step-title-text {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.mine-step-title-text.orange-text {
+  color: #ea580c;
+}
+
+.mine-step-title-text.gray-text {
+  color: #334155;
+}
+
+.mine-step-count-pill {
+  margin-top: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.mine-step-filter-btn.active .mine-step-count-pill {
+  background: #ea580c;
+  color: #ffffff;
+}
+
+.mine-stepper-arrow {
+  color: #cbd5e1;
+  font-size: 18px;
+  font-weight: bold;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+
+/* ==========================================================================
+   Horizontal Steps Wizard Inside Ticket Cards
+   ========================================================================== */
+.card-timeline-container {
+  overflow-x: auto;
+  padding: 4px 0 10px;
+}
+
+.steps-wizard {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 6px !important;
+  min-width: 540px;
+  margin: 10px 0 14px !important;
+  padding: 12px 14px;
+  background: #fffaf0;
+  border-radius: 14px;
+  border: 1.5px solid #fed7aa;
+}
+
+.step-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  flex: 1;
+  position: relative;
+  min-width: 85px;
+}
+
+.step-circle {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 9999px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  margin-bottom: 6px;
+  background: #cbd5e1;
+  color: #475569;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  transition: all 0.2s ease;
+}
+
+.step-item.active .step-circle {
+  background: #ea580c !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 4px #ffedd5 !important;
+}
+
+.step-label {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #64748b;
+  line-height: 1.25;
+}
+
+.step-item.active .step-label {
+  color: #ea580c !important;
+  font-weight: 800 !important;
+}
+
+.step-connector-arrow {
+  color: #cbd5e1;
+  font-size: 16px;
+  font-weight: 800;
+  user-select: none;
+  flex-shrink: 0;
+  margin-top: -18px;
+}

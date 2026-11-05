@@ -21,28 +21,49 @@ window.setDashboardPeriod = function(p) {
   render();
 };
 
+window.goToAllWithFilter = function(filterKey) {
+  fil = filterKey || 'all';
+  setTab('all');
+};
+
 // Screen 5: Dashboard ภาพรวม
 function vDashboard() {
-  const total = T.length;
-  const done = T.filter(t => t.status === 'done').length;
-  const doing = T.filter(t => t.status === 'doing').length;
-  const pending = T.filter(t => t.status === 'accepted' || !t.status).length;
+  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+  const allTickets = [...(T || [])];
+  myT.forEach(mt => {
+    if (mt.no && !allTickets.some(x => x.id === mt.no)) {
+      allTickets.push({
+        id: mt.no,
+        title: mt.title,
+        status: mt.status || 'accepted',
+        cat: mt.type,
+        created_at: mt.date,
+        items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
+      });
+    }
+  });
+
+  const validList = allTickets.filter(t => t.status !== 'deleted');
+  const total = validList.length;
+  const done = validList.filter(t => t.status === 'done' || t.status === 'closed').length;
+  const doing = validList.filter(t => t.status === 'doing' || t.status === 'checking').length;
+  const pending = validList.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status))).length;
 
   const donePct = total > 0 ? Math.round((done / total) * 100) : 0;
   const doingPct = total > 0 ? Math.round((doing / total) * 100) : 0;
   const pendingPct = total > 0 ? Math.round((pending / total) * 100) : 0;
 
-  // Real Top Issues from T
+  // Real Top Issues from allTickets
   const issueCounts = {};
-  T.forEach(t => {
+  allTickets.forEach(t => {
     const item = t.items?.[0]?.item || t.cat || 'งานทั่วไป';
     issueCounts[item] = (issueCounts[item] || 0) + 1;
   });
   const topIssues = Object.entries(issueCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  // Real Category breakdown from T
+  // Real Category breakdown from allTickets
   const catCounts = {};
-  T.forEach(t => {
+  allTickets.forEach(t => {
     const c = t.cat || (t.types?.[0]) || 'งานซ่อม';
     catCounts[c] = (catCounts[c] || 0) + 1;
   });
@@ -55,7 +76,10 @@ function vDashboard() {
         <span>📊</span> Dashboard ภาพรวม
       </h2>
       <div style="display:flex; align-items:center; gap:8px;">
-        <select class="form-control" style="width:auto; font-weight:700; font-size:15px;" onchange="setDashboardPeriod(this.value)">
+        <button type="button" class="btn btn-outline" style="font-weight:700; font-size:14px; background:#fff; height:42px; border-radius:8px;" onclick="setTab('asset_check')">
+          🏷️ ตรวจสอบประวัติครุภัณฑ์
+        </button>
+        <select class="form-control" style="width:auto; font-weight:700; font-size:15px; height:42px;" onchange="setDashboardPeriod(this.value)">
           <option value="month" ${adminDashboardPeriod === 'month' ? 'selected' : ''}>ช่วงเวลา: เดือนนี้ ∨</option>
           <option value="quarter" ${adminDashboardPeriod === 'quarter' ? 'selected' : ''}>ช่วงเวลา: ไตรมาสนี้ ∨</option>
           <option value="year" ${adminDashboardPeriod === 'year' ? 'selected' : ''}>ช่วงเวลา: ปีนี้ ∨</option>
@@ -63,9 +87,9 @@ function vDashboard() {
       </div>
     </div>
 
-    <!-- 4 KPI Summary Cards (Screen 5) -->
+    <!-- 4 KPI Summary Cards (กดสถานะจะเด้งไปที่หน้าสรุปงานซ่อมในสถานะนั้นทันที) -->
     <div class="kpi-grid">
-      <div class="kpi-card">
+      <div class="kpi-card" onclick="goToAllWithFilter('all')" style="cursor:pointer;" title="คลิกเพื่อดูสรุปงานซ่อมทั้งหมด">
         <div class="kpi-icon-box kpi-icon-blue">🔧</div>
         <div class="kpi-info-box">
           <div class="kpi-label">งานทั้งหมด</div>
@@ -76,7 +100,7 @@ function vDashboard() {
         </div>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card" onclick="goToAllWithFilter('done')" style="cursor:pointer;" title="คลิกเพื่อดูสรุปงานซ่อมที่เสร็จสิ้น">
         <div class="kpi-icon-box kpi-icon-green">✅</div>
         <div class="kpi-info-box">
           <div class="kpi-label">เสร็จสิ้น</div>
@@ -88,7 +112,7 @@ function vDashboard() {
         </div>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card" onclick="goToAllWithFilter('doing')" style="cursor:pointer;" title="คลิกเพื่อดูสรุปงานซ่อมที่กำลังดำเนินการ">
         <div class="kpi-icon-box kpi-icon-orange">🕒</div>
         <div class="kpi-info-box">
           <div class="kpi-label">กำลังดำเนินการ</div>
@@ -100,7 +124,7 @@ function vDashboard() {
         </div>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card" onclick="goToAllWithFilter('accepted')" style="cursor:pointer;" title="คลิกเพื่อดูสรุปงานซ่อมที่รอดำเนินการ">
         <div class="kpi-icon-box kpi-icon-red">❗</div>
         <div class="kpi-info-box">
           <div class="kpi-label">รอดำเนินการ</div>
@@ -124,7 +148,7 @@ function vDashboard() {
         <div style="padding:16px 8px; text-align:center;">
           ${total > 0 ? `
             <div style="display:flex; flex-direction:column; gap:14px; text-align:left;">
-              <div>
+              <div onclick="goToAllWithFilter('done')" style="cursor:pointer;" title="คลิกเพื่อดูสรุปงานซ่อมที่เสร็จสิ้น">
                 <div style="display:flex; justify-content:space-between; font-weight:700; margin-bottom:4px;">
                   <span>งานเสร็จสิ้น (${done} รายการ)</span>
                   <span style="color:var(--success);">${donePct}%</span>
@@ -134,7 +158,7 @@ function vDashboard() {
                 </div>
               </div>
 
-              <div>
+              <div onclick="goToAllWithFilter('doing')" style="cursor:pointer;" title="คลิกเพื่อดูสรุปงานซ่อมที่กำลังดำเนินการ">
                 <div style="display:flex; justify-content:space-between; font-weight:700; margin-bottom:4px;">
                   <span>กำลังดำเนินการ (${doing} รายการ)</span>
                   <span style="color:var(--warning);">${doingPct}%</span>
@@ -144,7 +168,7 @@ function vDashboard() {
                 </div>
               </div>
 
-              <div>
+              <div onclick="goToAllWithFilter('accepted')" style="cursor:pointer;" title="คลิกเพื่อดูสรุปงานซ่อมที่รอดำเนินการ">
                 <div style="display:flex; justify-content:space-between; font-weight:700; margin-bottom:4px;">
                   <span>รอดำเนินการ (${pending} รายการ)</span>
                   <span style="color:var(--danger);">${pendingPct}%</span>
@@ -438,23 +462,73 @@ window.confirmAssignDirect = async function(ticketId, techId) {
   toast(`มอบหมายงาน ${ticketId} ให้ ${p ? p.name : 'ช่าง'} เรียบร้อยแล้ว!`);
 };
 
-// Screen: จัดการงานซ่อม (All Tickets Management)
+// Screen: สรุปงานซ่อม (All Tickets Management)
 function vAll() {
-  const L = T.filter(t => t.status === fil);
+  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+  const allTickets = [...(T || [])];
+  myT.forEach(mt => {
+    if (mt.no && !allTickets.some(x => x.id === mt.no)) {
+      allTickets.push({
+        id: mt.no,
+        title: mt.title,
+        status: mt.status || 'accepted',
+        cat: mt.type,
+        created_at: mt.date,
+        items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
+      });
+    }
+  });
+
+  const validTickets = allTickets.filter(t => t.status !== 'deleted');
+
+  let L = allTickets;
+  if (fil === 'all') {
+    L = validTickets;
+  } else if (fil === 'done') {
+    L = allTickets.filter(t => t.status === 'done' || t.status === 'closed');
+  } else if (fil === 'doing') {
+    L = allTickets.filter(t => t.status === 'doing');
+  } else if (fil === 'checking') {
+    L = allTickets.filter(t => t.status === 'checking');
+  } else if (fil === 'accepted') {
+    L = allTickets.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status)));
+  } else {
+    L = allTickets.filter(t => t.status === fil);
+  }
+
+  const acceptedCount = allTickets.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status))).length;
+  const doingCount = allTickets.filter(t => t.status === 'doing').length;
+  const checkingCount = allTickets.filter(t => t.status === 'checking').length;
+  const doneCount = allTickets.filter(t => t.status === 'done' || t.status === 'closed').length;
+  const deletedCount = allTickets.filter(t => t.status === 'deleted').length;
+
   return `
     <div class="content-card">
       <div class="card-header-row">
         <h2 style="font-size:20px; font-weight:800; display:flex; align-items:center; gap:8px;">
-          <span>📋</span> จัดการงานซ่อมทั้งหมด
+          <span>📋</span> สรุปงานซ่อมทั้งหมด
         </h2>
       </div>
 
       <div class="filter-pills" style="margin-bottom:18px;">
-        ${Object.keys(ST).map(s => `
-          <button class="filter-pill ${fil === s ? 'active' : ''}" onclick="setFil('${s}')">
-            ${ST[s][0]} (${T.filter(t => t.status === s).length})
-          </button>
-        `).join('')}
+        <button class="filter-pill ${fil === 'all' ? 'active' : ''}" onclick="setFil('all')">
+          ทั้งหมด (${validTickets.length})
+        </button>
+        <button class="filter-pill ${fil === 'accepted' ? 'active' : ''}" onclick="setFil('accepted')">
+          รับเรื่องแล้ว (${acceptedCount})
+        </button>
+        <button class="filter-pill ${fil === 'doing' ? 'active' : ''}" onclick="setFil('doing')">
+          กำลังดำเนินการ (${doingCount})
+        </button>
+        <button class="filter-pill ${fil === 'checking' ? 'active' : ''}" onclick="setFil('checking')">
+          ตรวจสอบงาน (${checkingCount})
+        </button>
+        <button class="filter-pill ${fil === 'done' ? 'active' : ''}" onclick="setFil('done')">
+          เสร็จสิ้น (${doneCount})
+        </button>
+        <button class="filter-pill ${fil === 'deleted' ? 'active' : ''}" onclick="setFil('deleted')">
+          ยกเลิก/ลบ (${deletedCount})
+        </button>
       </div>
 
       <div style="margin-top:12px;">
@@ -602,7 +676,362 @@ window.csv = function () {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv' })); a.download = 'material-usage.csv'; a.click();
 };
 
+// ==========================================================================
+// Screen: ตรวจสอบประวัติการซ่อมครุภัณฑ์ (Asset Maintenance History Checker)
+// ==========================================================================
+let assetSearchKeyword = '';
+window.assetSearchKeyword = assetSearchKeyword;
+
+window.searchAsset = function(val) {
+  assetSearchKeyword = (val || '').trim();
+  render();
+};
+
+window.resetAssetSearch = function() {
+  assetSearchKeyword = '';
+  render();
+};
+
+function vAssetCheck() {
+  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+  const allTickets = [...(T || [])];
+  myT.forEach(mt => {
+    if (mt.no && !allTickets.some(x => x.id === mt.no)) {
+      allTickets.push({
+        id: mt.no,
+        title: mt.title,
+        status: mt.status || 'accepted',
+        cat: mt.type,
+        created_at: mt.date,
+        items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
+      });
+    }
+  });
+
+  // รวบรวมหมายเลขครุภัณฑ์ที่มีทั้งหมดในระบบ
+  const assetMap = new Map();
+  allTickets.forEach(t => {
+    const a = (t.items?.[0]?.asset || t.asset_no || t.asset || '').trim();
+    if (a && a !== '-' && a !== 'ไม่ได้ระบุ') {
+      const list = assetMap.get(a) || [];
+      list.push(t);
+      assetMap.set(a, list);
+    }
+  });
+
+  const knownAssets = Array.from(assetMap.entries()).map(([code, tickets]) => {
+    const latestTicket = tickets[0];
+    const equipName = (typeof getTicketTitle === 'function' ? getTicketTitle(latestTicket) : (latestTicket.items?.[0]?.item || latestTicket.title || 'ครุภัณฑ์'));
+    return {
+      code,
+      name: equipName,
+      location: `อาคาร ${latestTicket.bld || '-'} ชั้น ${latestTicket.flr || '-'} (${latestTicket.room || '-'})`,
+      count: tickets.length,
+      tickets
+    };
+  });
+
+  let searchResults = null;
+  const hasSearched = Boolean(assetSearchKeyword);
+
+  if (hasSearched) {
+    const cleanKey = assetSearchKeyword.toLowerCase();
+    searchResults = allTickets.filter(t => {
+      const a = (t.items?.[0]?.asset || t.asset_no || t.asset || '').trim().toLowerCase();
+      return a && (a === cleanKey || a.includes(cleanKey));
+    });
+  }
+
+  // คำนวณสรุปข้อมูลหากพบประวัติ
+  let assetSummary = null;
+  if (searchResults && searchResults.length > 0) {
+    searchResults.sort((a, b) => {
+      const tA = new Date(a.created_at || a.done_at || 0).getTime();
+      const tB = new Date(b.created_at || b.done_at || 0).getTime();
+      return tB - tA;
+    });
+
+    const first = searchResults[0];
+    const matchedAssetCode = first.items?.[0]?.asset || first.asset_no || first.asset || assetSearchKeyword;
+    const equipName = (typeof getTicketTitle === 'function' ? getTicketTitle(first) : (first.items?.[0]?.item || first.title || first.sub_type || first.cat || 'ครุภัณฑ์'));
+    const totalBudget = searchResults.reduce((sum, t) => sum + (Number(t.budget || t.cost || 0)), 0);
+    const allTechs = [...new Set(searchResults.map(t => t.tech_name).filter(Boolean))];
+    const ticketIds = searchResults.map(t => t.id);
+    const usedMats = (typeof U !== 'undefined' ? U : []).filter(u => ticketIds.includes(u.ticket_id));
+
+    assetSummary = {
+      code: matchedAssetCode,
+      name: equipName,
+      cat: first.cat || first.sub_type || 'ทั่วไป',
+      location: `อาคาร ${first.bld || '-'} ชั้น ${first.flr || '-'} (ห้อง/บริเวณ ${first.room || '-'})`,
+      repairsCount: searchResults.length,
+      totalBudget: totalBudget,
+      techs: allTechs.length ? allTechs.join(', ') : 'ช่างซ่อมบำรุง',
+      materials: usedMats
+    };
+  }
+
+  return `
+    <div class="content-card">
+      <div class="card-header-row" style="flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <h2 style="font-size:22px; font-weight:800; display:flex; align-items:center; gap:8px;">
+          <span>🏷️</span> ตรวจสอบประวัติการซ่อมครุภัณฑ์
+        </h2>
+        <span class="badge badge-doing" style="font-size:14.5px; padding:6px 14px;">
+          มีครุภัณฑ์ที่บันทึกแล้ว ${knownAssets.length} รายการ
+        </span>
+      </div>
+
+      <!-- กล่องค้นหาหมายเลขครุภัณฑ์ -->
+      <div style="background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:14px; padding:18px; margin-bottom:20px;">
+        <label style="font-size:15px; font-weight:700; color:#0b2545; display:block; margin-bottom:8px;">
+          🔍 ระบุหมายเลขครุภัณฑ์ที่ต้องการตรวจสอบ:
+        </label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <input type="text" id="asset_search_input" class="form-control" 
+                 value="${esc(assetSearchKeyword)}" 
+                 placeholder="กรอกหมายเลขครุภัณฑ์ เช่น 7440-001-0001/67..." 
+                 style="flex:1; min-width:260px; height:46px; font-size:16px; font-weight:700; border:2px solid #94a3b8; border-radius:10px;"
+                 onkeydown="if(event.key==='Enter') searchAsset(this.value)">
+          <button type="button" class="btn btn-primary" style="height:46px; padding:0 24px; font-size:15.5px; font-weight:800; border-radius:10px;" onclick="searchAsset(document.getElementById('asset_search_input').value)">
+            🔍 ตรวจสอบ
+          </button>
+          ${hasSearched ? `
+            <button type="button" class="btn btn-outline" style="height:46px; padding:0 18px; font-size:15px; border-radius:10px;" onclick="resetAssetSearch()">
+              ล้างค่า
+            </button>
+          ` : ''}
+        </div>
+
+        ${knownAssets.length ? `
+          <div style="margin-top:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="font-size:13px; font-weight:700; color:#64748b;">ครุภัณฑ์ที่มีประวัติในระบบ:</span>
+            ${knownAssets.slice(0, 8).map(a => `
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:13px; padding:3px 10px; border-radius:6px; font-family:monospace; font-weight:700; background:#fff;" onclick="searchAsset('${esc(a.code)}')">
+                🏷️ ${esc(a.code)} (${esc(a.name)})
+              </button>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- ผลลัพธ์การค้นหา -->
+      ${hasSearched ? (
+        searchResults && searchResults.length > 0 ? `
+          <!-- พบคลังข้อมูลครุภัณฑ์ -->
+          <!-- 1. การ์ดสรุปข้อมูลครุภัณฑ์ -->
+          <div style="background:#ffffff; border:1.5px solid #fed7aa; border-radius:14px; padding:20px; margin-bottom:20px; box-shadow:0 4px 12px rgba(234,88,12,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; border-bottom:1px solid #fed7aa; padding-bottom:14px; margin-bottom:16px;">
+              <div>
+                <span class="badge" style="background:#fff7ed; color:#ea580c; border:1.5px solid #fed7aa; font-family:monospace; font-size:16px; font-weight:800; padding:4px 12px;">
+                  🏷️ หมายเลขครุภัณฑ์: ${esc(assetSummary.code)}
+                </span>
+                <h3 style="font-size:20px; font-weight:800; color:#0b2545; margin:10px 0 4px 0;">
+                  ${esc(assetSummary.name)}
+                </h3>
+                <div style="font-size:14.5px; color:#64748b;">
+                  <b>หมวดหมู่งาน:</b> ${esc(assetSummary.cat)} | <b>สถานที่ตั้ง:</b> ${esc(assetSummary.location)}
+                </div>
+              </div>
+              <span class="badge badge-done" style="font-size:15px; padding:6px 14px;">
+                พบประวัติการซ่อม ${assetSummary.repairsCount} ครั้ง
+              </span>
+            </div>
+
+            <!-- กล่องสถิติ 4 ช่อง -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;">
+                <div style="font-size:12.5px; color:#64748b; font-weight:700;">จำนวนครั้งที่เคยซ่อม</div>
+                <div style="font-size:20px; font-weight:800; color:#0b2545; margin-top:4px;">${assetSummary.repairsCount} ครั้ง</div>
+              </div>
+              <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px 14px;">
+                <div style="font-size:12.5px; color:#166534; font-weight:700;">งบประมาณที่ใช้รวม</div>
+                <div style="font-size:20px; font-weight:800; color:#15803d; margin-top:4px;">
+                  ${assetSummary.totalBudget > 0 ? assetSummary.totalBudget.toLocaleString() + ' บาท' : 'เบิกตามพัสดุ'}
+                </div>
+              </div>
+              <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:12px 14px;">
+                <div style="font-size:12.5px; color:#1e40af; font-weight:700;">วัสดุที่เคยเบิกใช้</div>
+                <div style="font-size:20px; font-weight:800; color:#2563eb; margin-top:4px;">${assetSummary.materials.length} รายการ</div>
+              </div>
+              <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:12px 14px;">
+                <div style="font-size:12.5px; color:#ea580c; font-weight:700;">ช่างที่เคยดำเนินการ</div>
+                <div style="font-size:16px; font-weight:800; color:#c2410c; margin-top:6px;">👨‍🔧 ${esc(assetSummary.techs)}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. ตารางรายการวัสดุที่เคยเบิกในการซ่อมครุภัณฑ์นี้ -->
+          <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:14px; padding:18px; margin-bottom:20px;">
+            <h4 style="font-size:17px; font-weight:800; color:#0b2545; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
+              <span>📦</span> รายการวัสดุอุปกรณ์ที่เคยเบิกใช้ในการซ่อมครุภัณฑ์นี้ (${assetSummary.materials.length} รายการ)
+            </h4>
+            <div class="nusp-table-wrapper">
+              <table class="nusp-table">
+                <thead>
+                  <tr>
+                    <th>วันที่เบิก</th>
+                    <th>ใบงานที่เบิก</th>
+                    <th>ชื่อวัสดุ</th>
+                    <th>จำนวน</th>
+                    <th>ช่างผู้เบิก</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${assetSummary.materials.length ? assetSummary.materials.map(u => `
+                    <tr>
+                      <td style="color:var(--text-muted); font-size:14px; white-space:nowrap;">${fmt(u.created_at)}</td>
+                      <td style="font-weight:700; color:var(--primary); white-space:nowrap;">${esc(u.ticket_id)}</td>
+                      <td style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
+                      <td style="font-weight:800; color:#0284c7; white-space:nowrap;">${u.qty} ${esc(u.unit || 'ชิ้น')}</td>
+                      <td style="font-weight:600; white-space:nowrap;">${esc(u.tech_name || '-')}</td>
+                    </tr>
+                  `).join('') : `
+                    <tr>
+                      <td colspan="5" style="text-align:center; padding:24px; color:#64748b;">ไม่มีประวัติการเบิกวัสดุสำหรับครุภัณฑ์นี้</td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 3. รายละเอียดประวัติการซ่อมแต่ละครั้ง (Timeline) -->
+          <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:14px; padding:18px;">
+            <h4 style="font-size:17px; font-weight:800; color:#0b2545; margin:0 0 16px 0; display:flex; align-items:center; gap:8px;">
+              <span>🗓️</span> ประวัติการซ่อมแต่ละช่วงเวลา (${searchResults.length} ครั้ง)
+            </h4>
+
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              ${searchResults.map((t, idx) => {
+                const ticketMats = (typeof U !== 'undefined' ? U : []).filter(u => u.ticket_id === t.id);
+                const reqDate = t.date || (t.created_at ? fmt(t.created_at) : '-');
+                const doneDate = t.done_at ? fmt(t.done_at) : (t.status === 'done' || t.status === 'closed' ? 'เสร็จสิ้นแล้ว' : 'กำลังดำเนินการ');
+
+                return `
+                  <div style="border:1.5px solid #e2e8f0; border-radius:12px; padding:16px; background:#f8fafc;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:12px;">
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="background:#0b2545; color:#fff; border-radius:999px; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;">
+                          ${searchResults.length - idx}
+                        </span>
+                        <span style="font-weight:800; color:#ea580c; font-size:16px;">ใบแจ้งซ่อม: ${esc(t.id)}</span>
+                        ${(typeof ST !== 'undefined' && ST[t.status]) ? `
+                          <span class="badge" style="background:#fff7ed; color:${ST[t.status][1]}; border:1px solid ${ST[t.status][1]}; font-size:12px;">
+                            ${ST[t.status][0]}
+                          </span>
+                        ` : ''}
+                      </div>
+
+                      <div style="font-size:14px; color:#475569;">
+                        <b>ช่วงเวลา:</b> แจ้งเมื่อ ${esc(reqDate)} ${t.done_at ? `| เสร็จสิ้น: <span style="color:#10b981; font-weight:700;">${esc(doneDate)}</span>` : ''}
+                      </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; font-size:14.5px; line-height:1.6; margin-bottom:10px;">
+                      <div><b>หัวข้อปัญหา:</b> <span style="color:#0b2545; font-weight:700;">${esc(getTicketTitle(t))}</span></div>
+                      <div><b>ช่างผู้ดำเนินการ:</b> <span style="color:#0284c7; font-weight:700;">👨‍🔧 ${esc(t.tech_name || 'ช่างซ่อมบำรุง')}</span></div>
+                      <div><b>งบประมาณที่ใช้:</b> <span style="color:#15803d; font-weight:700;">${t.budget ? Number(t.budget).toLocaleString() + ' บาท' : 'เบิกตามพัสดุ'}</span></div>
+                      <div><b>ผู้แจ้งซ่อม:</b> ${esc(t.name || '-')}</div>
+                    </div>
+
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; font-size:14.5px; margin-bottom:10px;">
+                      <b style="color:#0b2545;">อาการ / รายละเอียดการซ่อม:</b>
+                      <div style="margin-top:2px; color:#334155;">${esc(getTicketDesc(t))}</div>
+                    </div>
+
+                    <!-- วัสดุที่เบิกในครั้งนี้ -->
+                    <div style="font-size:14px;">
+                      <b>📦 วัสดุที่เบิกใช้ในครั้งนี้:</b>
+                      ${ticketMats.length ? `
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                          ${ticketMats.map(m => `
+                            <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:13px; padding:3px 10px;">
+                              ${esc(m.name)}: <b>${m.qty} ${esc(m.unit || 'ชิ้น')}</b> (โดย ${esc(m.tech_name)})
+                            </span>
+                          `).join('')}
+                        </div>
+                      ` : `
+                        <span style="color:#94a3b8; margin-left:6px;">ไม่มีการเบิกวัสดุในครั้งนี้</span>
+                      `}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : `
+          <!-- ค้นหาแล้วไม่พบข้อมูล: ขึ้นข้อความไม่มีประวัติในการซ่อม ตามคำขอ -->
+          <div style="background:#ffffff; border:1.5px dashed #ef4444; border-radius:14px; padding:48px 24px; text-align:center; margin-top:10px;">
+            <div style="font-size:56px; line-height:1; margin-bottom:14px;">🔍🚫</div>
+            <h3 style="font-size:22px; font-weight:800; color:#b91c1c; margin:0 0 10px 0;">
+              ไม่มีประวัติในการซ่อม
+            </h3>
+            <p style="font-size:16px; color:#64748b; margin:0 auto 20px; max-width:520px; line-height:1.5;">
+              ไม่พบประวัติการแจ้งซ่อม หรือไม่มีข้อมูลการซ่อมบำรุงสำหรับหมายเลขครุภัณฑ์ 
+              <b style="color:#0b2545; font-family:monospace; background:#fee2e2; padding:2px 8px; border-radius:4px;">"${esc(assetSearchKeyword)}"</b> ในระบบ
+            </p>
+            <button type="button" class="btn btn-outline" style="min-width:140px; font-weight:700;" onclick="resetAssetSearch()">
+              ล้างการค้นหา
+            </button>
+          </div>
+        `
+      ) : `
+        <!-- หน้าเริ่มต้น: ตารางรายการครุภัณฑ์ที่มีประวัติทั้งหมดในระบบ -->
+        <div style="font-weight:700; font-size:16.5px; margin-bottom:12px; color:#0b2545;">
+          📋 ทะเบียนครุภัณฑ์ที่มีประวัติการซ่อมในระบบ (${knownAssets.length} รายการ)
+        </div>
+        <div class="nusp-table-wrapper">
+          <table class="nusp-table">
+            <thead>
+              <tr>
+                <th>หมายเลขครุภัณฑ์</th>
+                <th>ชื่อ / ชนิดอุปกรณ์</th>
+                <th>สถานที่ตั้ง</th>
+                <th>จำนวนครั้งที่เคยซ่อม</th>
+                <th>การจัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${knownAssets.length ? knownAssets.map(a => `
+                <tr>
+                  <td style="font-weight:800; color:var(--primary); font-family:monospace; font-size:15px; white-space:nowrap;">
+                    🏷️ ${esc(a.code)}
+                  </td>
+                  <td style="font-weight:700; color:#0f172a; font-size:15px;">
+                    ${esc(a.name)}
+                  </td>
+                  <td style="color:#475569; font-size:14px;">
+                    ${esc(a.location)}
+                  </td>
+                  <td>
+                    <span class="badge badge-done" style="font-size:13.5px; font-weight:700;">
+                      ${a.count} ครั้ง
+                    </span>
+                  </td>
+                  <td>
+                    <button class="btn btn-primary btn-sm" style="font-weight:700;" onclick="searchAsset('${esc(a.code)}')">
+                      🔎 ดูประวัติการซ่อม
+                    </button>
+                  </td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td colspan="5" style="text-align:center; padding:36px; color:#64748b;">
+                    ยังไม่มีข้อมูลหมายเลขครุภัณฑ์ในระบบ (สามารถระบุเลขครุภัณฑ์ในใบงานเพื่อเริ่มเก็บประวัติได้)
+                  </td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+  `;
+}
+
 window.vDashboard = vDashboard;
 window.vTechsManage = vTechsManage;
 window.vAll = vAll;
 window.vStock = vStock;
+window.vAssetCheck = vAssetCheck;

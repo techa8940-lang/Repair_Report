@@ -252,23 +252,105 @@ function vTaskDetail() {
   `;
 }
 
-// Screen: งานของฉัน (In Progress Tasks)
+// ==========================================================================
+// Screen: งานของฉัน (พร้อมแถบลำดับการทำงาน 5 ขั้นตอนด้านบน + กรองตามขั้น)
+// ==========================================================================
+let mineStepFilter = 'doing'; // ค่าเริ่มต้น: แสดงงานที่กำลังดำเนินการ (หรือ 'all')
+
+window.setMineStepFilter = function(stepKey) {
+  // หากกดซ้ำที่ขั้นตอนเดิม ให้สลับเป็น 'all' เพื่อความสะดวก
+  if (mineStepFilter === stepKey) {
+    mineStepFilter = 'all';
+  } else {
+    mineStepFilter = stepKey;
+  }
+  render();
+};
+
 function vMine() {
   const isDevOrAdmin = me?.dev || me?.role === 'admin';
-  const a = T.filter(t => (isDevOrAdmin ? (t.tech_name === me?.name || t.tech_id === me?.id || (me?.role === 'admin' && t.status === 'doing')) : t.tech_id === me?.id) && ['accepted', 'doing'].includes(t.status)), by = {};
-  
-  a.forEach(t => (by[`อาคาร ${t.bld} ชั้น ${t.flr}`] ??= []).push(t));
+
+  // 1. งานทั้งหมดที่เป็นของช่าง (หรือแอดมิน)
+  const allMyTasks = T.filter(t => 
+    isDevOrAdmin 
+      ? (t.tech_name === me?.name || t.tech_id === me?.id || me?.role === 'admin') 
+      : t.tech_id === me?.id
+  );
+
+  // 2. คำนวณจำนวนงานในแต่ละขั้นตอน (สิ้นสุดที่ซ่อมเสร็จสิ้น)
+  const stepsDef = [
+    { key: 'accepted', num: 1, name: 'รับเรื่องแล้ว', icon: '📋' },
+    { key: 'doing', num: 2, name: 'กำลังดำเนินการ', icon: '🔧' },
+    { key: 'checking', num: 3, name: 'ตรวจสอบงาน', icon: '✔️' },
+    { key: 'done', num: 4, name: 'ซ่อมเสร็จสิ้น', icon: '👍' }
+  ];
+
+  const countMap = {};
+  stepsDef.forEach(s => {
+    countMap[s.key] = allMyTasks.filter(t => (t.status === s.key || (s.key === 'done' && t.status === 'closed'))).length;
+  });
+
+  // 3. กรองรายการตามขั้นตอนที่เลือก (เวลากดไปที่แต่ละขั้น ก็ให้ขึ้นแต่รายการที่อยู่ในขั้นนั้นอยู่)
+  let filtered = allMyTasks;
+  if (mineStepFilter !== 'all') {
+    filtered = allMyTasks.filter(t => t.status === mineStepFilter);
+  }
+
+  // 4. จัดกลุ่มตามตำแหน่ง อาคารและชั้น
+  const by = {};
+  filtered.forEach(t => (by[`อาคาร ${t.bld || '-'} ชั้น ${t.flr || '-'}`] ??= []).push(t));
   const ks = Object.keys(by).sort();
+
+  const currentStepObj = stepsDef.find(s => s.key === mineStepFilter);
+  const currentStepName = currentStepObj ? currentStepObj.name : 'งานทั้งหมด';
 
   return `
     <div class="content-card">
-      <div class="card-header-row" style="flex-wrap:wrap; gap:8px;">
+      <div class="card-header-row" style="flex-wrap:wrap; gap:8px; margin-bottom:18px;">
         <h2 style="font-size:22px; font-weight:800; display:flex; align-items:center; gap:8px;">
-          <span>🛠️</span> งานของฉัน (กำลังดำเนินการ)
+          <span>🛠️</span> งานของฉัน (${currentStepName})
         </h2>
-        <span class="badge badge-doing" style="font-size:15px; padding:6px 14px;">${a.length} งาน</span>
+        <span class="badge badge-doing" style="font-size:15px; padding:6px 14px;">พบ ${filtered.length} งาน</span>
       </div>
 
+      <!-- แถบลำดับการทำงานขึ้นไปด้านบน (5 ขั้นตอนตรงตามภาพ) กดเลือกขั้นไหนจะแสดงเฉพาะงานในขั้นนั้น -->
+      <div class="mine-stepper-filter-card">
+        <div class="mine-stepper-filter-title">
+          <span style="display:flex; align-items:center; gap:6px;">
+            <span>📍</span> ลำดับขั้นตอนการทำงาน (คลิกที่ขั้นตอนเพื่อกรองงาน):
+          </span>
+          <button type="button" class="btn btn-outline btn-sm ${mineStepFilter === 'all' ? 'active' : ''}" style="font-size:13px; padding:4px 12px; ${mineStepFilter === 'all' ? 'background:#ea580c; color:#fff; border-color:#ea580c;' : ''}" onclick="setMineStepFilter('all')">
+            ดูงานทั้งหมด (${allMyTasks.length})
+          </button>
+        </div>
+
+        <div class="mine-stepper-track">
+          ${stepsDef.map((s, idx) => {
+            const isAct = mineStepFilter === s.key;
+            const cnt = countMap[s.key] || 0;
+            const isPassedOrHasWork = cnt > 0 || isAct;
+
+            return `
+              <div class="mine-step-filter-btn ${isAct ? 'active' : ''}" 
+                   onclick="setMineStepFilter('${s.key}')" 
+                   title="คลิกเพื่อแสดงเฉพาะงานในขั้น: ${s.name}">
+                <div class="mine-step-circle-badge ${isPassedOrHasWork ? 'orange-badge' : 'gray-badge'}">
+                  ${isAct || cnt > 0 ? (cnt > 0 ? cnt : '✓') : s.num}
+                </div>
+                <div class="mine-step-title-text ${isPassedOrHasWork ? 'orange-text' : 'gray-text'}">
+                  ${s.name}
+                </div>
+                <span class="mine-step-count-pill">
+                  ${cnt} งาน
+                </span>
+              </div>
+              ${idx < stepsDef.length - 1 ? `<div class="mine-stepper-arrow">&gt;</div>` : ''}
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- รายการใบงานที่กรองแล้ว -->
       ${ks.map((k, i) => `
         <div style="margin-top:24px; margin-bottom:14px;">
           <h3 style="font-size:17px; font-weight:700; color:var(--primary); display:flex; align-items:center; gap:6px;">
@@ -276,7 +358,11 @@ function vMine() {
           </h3>
         </div>
         ${by[k].map(t => card(t)).join('')}
-      `).join('') || '<div class="mut" style="text-align:center; padding:40px; font-size:16px;">ไม่มีงานที่กำลังดำเนินการอยู่ในขณะนี้</div>'}
+      `).join('') || `
+        <div class="mut" style="text-align:center; padding:40px; font-size:16px;">
+          ไม่มีงานในขั้นตอน "${currentStepName}" ในขณะนี้
+        </div>
+      `}
     </div>
   `;
 }
@@ -438,6 +524,9 @@ function vTechDone() {
           const usedMats = (typeof U !== 'undefined' ? U : []).filter(u => u.ticket_id === t.id);
           const titleText = (typeof getTicketTitle === 'function') ? getTicketTitle(t) : (t.title || 'แจ้งซ่อม');
           const descText = (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || '-');
+          const assetNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
+          const equipType = (typeof getTicketTitle === 'function' ? getTicketTitle(t) : (t.items?.[0]?.item || t.title || t.type || 'อุปกรณ์ทั่วไป'));
+          const reqDateStr = t.created_at ? fmt(t.created_at) : (t.date || '-');
 
           return `
             <div class="done-compact-item" id="done_item_${t.id}">
@@ -457,44 +546,89 @@ function vTechDone() {
 
               <!-- Collapsible Body รายละเอียดทั้งหมด -->
               <div class="done-compact-body" id="done_body_${t.id}">
-                <div style="display:grid; grid-template-columns: 1fr; gap:14px;">
-                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
-                    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                      <b style="color:#0b2545; font-size:16px;">ข้อมูลใบงานและการดำเนินงาน</b>
-                      <span class="mut" style="font-size:13.5px;">ผู้แจ้ง: <b>${esc(t.name || t.reporter_name || t.email || '-')}</b> (โทร: ${esc(t.tel || '-')})</span>
-                    </div>
-                    <div style="font-size:15px; line-height:1.6; color:#334155;">
-                      <div style="margin-bottom:6px;"><b>หัวข้อ:</b> <span style="font-weight:700; color:#0b2545;">${esc(titleText)}</span></div>
-                      <div style="background:#f8fafc; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:8px;">
-                        <b>รายละเอียดอาการ/ปัญหา:</b> <span style="font-weight:600; color:#0f172a;">${esc(descText)}</span>
+                <div style="display:grid; grid-template-columns: 1fr; gap:16px;">
+                  <!-- กล่อง 1: ข้อมูลทั้งหมดที่ผู้แจ้งกรอก -->
+                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:18px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:1.5px solid #f1f5f9; padding-bottom:12px; margin-bottom:14px;">
+                      <b style="color:#0b2545; font-size:17px; display:flex; align-items:center; gap:6px;">
+                        <span>📋</span> ข้อมูลการแจ้งซ่อม (ที่ผู้แจ้งกรอกทั้งหมด)
+                      </b>
+                      <div style="display:flex; gap:8px; align-items:center;">
+                        ${t.urgent ? '<span class="badge badge-urgent" style="font-size:12.5px;">❗ ด่วน</span>' : '<span class="badge badge-pending" style="font-size:12px; background:#f1f5f9; color:#475569; border-color:#cbd5e1;">ความเร่งด่วน: ปกติ</span>'}
+                        <span class="badge badge-done" style="font-size:12.5px;">✓ ซ่อมเสร็จสิ้นแล้ว</span>
                       </div>
-                      ${t.note ? `<div style="margin-top:6px; color:#0369a1;"><b>บันทึกช่าง/หมายเหตุ:</b> ${esc(t.note)}</div>` : ''}
-                      ${t.budget ? `<div style="margin-top:4px;"><b>งบประมาณที่ใช้:</b> ${Number(t.budget).toLocaleString()} บาท</div>` : ''}
                     </div>
 
-                    ${(t.photos && t.photos.length) ? `
-                      <div style="margin-top:14px;">
-                        <b style="font-size:13.5px; color:#475569;">📷 รูปภาพตอนแจ้ง:</b>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
-                          ${t.photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:75px; height:75px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:1px solid #cbd5e1;">`).join('')}
-                        </div>
+                    <!-- รายละเอียดข้อมูลผู้แจ้ง -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; font-size:14.5px; line-height:1.6; margin-bottom:14px;">
+                      <div><b>👤 ชื่อผู้แจ้งซ่อม:</b> <span style="font-weight:700; color:#0b2545;">${esc(t.name || t.reporter_name || '-')}</span></div>
+                      <div><b>📞 เบอร์โทรศัพท์:</b> <span style="font-weight:700; color:#0284c7;">${esc(t.tel || '-')}</span></div>
+                      <div><b>✉️ อีเมลผู้แจ้ง:</b> ${esc(t.email || '-')}</div>
+                      <div><b>📅 วันที่แจ้งซ่อม:</b> ${esc(reqDateStr)}</div>
+                      <div><b>🏢 อาคาร / สถานที่:</b> อาคาร ${esc(t.bld || '-')}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} ชั้น ${esc(t.flr || '-')} (ห้อง/บริเวณ ${esc(t.room || '-')})</div>
+                      <div><b>⚙️ ประเภทงาน:</b> ${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</div>
+                      <div><b>🏷️ ชนิดอุปกรณ์:</b> <span style="font-weight:700; color:#0b2545;">${esc(equipType)}</span></div>
+                      <div>
+                        <b>🏷️ หมายเลขครุภัณฑ์:</b> 
+                        ${assetNo ? `
+                          <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">${esc(assetNo)}</b>
+                        ` : `
+                          <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
+                        `}
                       </div>
-                    ` : ''}
+                    </div>
 
-                    ${(t.done_photos && t.done_photos.length) ? `
-                      <div style="margin-top:14px;">
-                        <b style="font-size:13.5px; color:#10b981;">📷 รูปผลงานหลังดำเนินการเสร็จ:</b>
+                    <!-- รายละเอียดอาการ/ปัญหาที่ชำรุด -->
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+                      <b style="color:#0b2545; font-size:14.5px;">รายละเอียดอาการชำรุด / ปัญหา:</b>
+                      <div style="font-weight:600; color:#0f172a; margin-top:4px; font-size:15px; line-height:1.5;">${esc(descText)}</div>
+                    </div>
+
+                    <!-- รูปภาพประกอบตอนแจ้ง -->
+                    <div>
+                      <b style="font-size:14px; color:#475569;">📷 รูปภาพประกอบตอนแจ้ง:</b>
+                      ${(t.photos && t.photos.length) ? `
                         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
-                          ${t.done_photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:75px; height:75px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:1.5px solid #10b981;">`).join('')}
+                          ${t.photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:80px; height:80px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:1px solid #cbd5e1;" title="คลิกดูภาพใหญ่">`).join('')}
                         </div>
-                      </div>
-                    ` : ''}
+                      ` : `
+                        <div style="color:#94a3b8; font-size:14px; margin-top:4px;">- ไม่มีรูปภาพแนบตอนแจ้ง -</div>
+                      `}
+                    </div>
                   </div>
 
-                  <!-- รายการวัสดุที่ใช้ไปในงานนี้ -->
-                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+                  <!-- กล่อง 2: รูปภาพตอนที่ตัวเองทำงานเสร็จแล้วแนบรูป + ข้อมูลการซ่อมของช่าง -->
+                  <div style="background:#ffffff; border:1.5px solid #bbf7d0; border-radius:12px; padding:18px;">
+                    <b style="color:#15803d; font-size:16.5px; display:flex; align-items:center; gap:6px; margin-bottom:12px;">
+                      <span>✅</span> ข้อมูลการดำเนินงานหลังซ่อมเสร็จสิ้น (ของช่าง)
+                    </b>
+
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; font-size:14.5px; line-height:1.6; margin-bottom:14px;">
+                      <div><b>🕒 วันที่ซ่อมเสร็จสิ้น:</b> <span style="font-weight:700; color:#15803d;">${esc(doneDateStr)}</span></div>
+                      <div><b>👨‍🔧 ช่างผู้รับผิดชอบ:</b> <span style="font-weight:700; color:#0284c7;">${esc(t.tech_name || me?.name || '-')}</span></div>
+                      <div><b>💰 งบประมาณที่ใช้:</b> <span style="font-weight:700; color:#15803d;">${t.budget ? Number(t.budget).toLocaleString() + ' บาท' : '-'}</span></div>
+                      <div><b>📝 บันทึกช่าง / หมายเหตุ:</b> ${t.note ? esc(t.note) : '-'}</div>
+                    </div>
+
+                    <!-- รูปภาพตอนที่ช่างทำงานเสร็จแล้วแนบรูป (ถ้าไม่มีแสดงผล - ไว้) -->
+                    <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:14px; margin-top:10px;">
+                      <b style="font-size:14.5px; color:#15803d; display:block; margin-bottom:6px;">
+                        📷 รูปภาพตอนที่ช่างทำงานเสร็จสิ้น (แนบรูปผลงาน):
+                      </b>
+                      ${(t.done_photos && t.done_photos.length) ? `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                          ${t.done_photos.map(p => `<img src="${url(p)}" onclick="zoom('${p}')" style="width:85px; height:85px; object-fit:cover; border-radius:8px; cursor:zoom-in; border:2px solid #10b981;" title="คลิกดูภาพใหญ่">`).join('')}
+                        </div>
+                      ` : `
+                        <div style="color:#64748b; font-size:14px; font-weight:600;">- ช่างไม่ได้แนบรูปภาพตอนเสร็จสิ้น -</div>
+                      `}
+                    </div>
+                  </div>
+
+                  <!-- กล่อง 3: รายการวัสดุอุปกรณ์ที่ใช้ไปในงานนี้ -->
+                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:18px;">
                     <b style="color:#0b2545; font-size:15.5px; display:flex; align-items:center; gap:6px;">
-                      <span>📦</span> รายการวัสดุอุปกรณ์ที่ใช้ในงานนี้ (${usedMats.length} รายการ)
+                      <span>📦</span> รายการวัสดุอุปกรณ์ที่เบิกใช้ในงานนี้ (${usedMats.length} รายการ)
                     </b>
                     ${usedMats.length ? `
                       <div style="margin-top:10px; overflow-x:auto;">
@@ -519,7 +653,7 @@ function vTechDone() {
                           </tbody>
                         </table>
                       </div>
-                    ` : '<div class="mut" style="font-size:13.5px; margin-top:8px;">ไม่มีการเบิกใช้วัสดุอุปกรณ์</div>'}
+                    ` : '<div class="mut" style="font-size:14px; margin-top:8px;">- ไม่มีการเบิกใช้วัสดุอุปกรณ์ -</div>'}
                   </div>
                 </div>
               </div>
@@ -528,48 +662,6 @@ function vTechDone() {
         }).join('') : `
           <div class="content-card" style="text-align:center; padding:40px; color:#64748b; font-size:16px;">
             ${!isFiltered ? 'ยังไม่มีประวัติงานที่ทำเสร็จ' : 'ไม่พบงานที่ทำเสร็จในช่วงเวลาที่เลือก'}
-          </div>
-        `}
-      </div>
-    </div>
-  `;
-}
-                  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:14px;">
-                    <b style="color:#0b2545; font-size:15px; display:flex; align-items:center; gap:6px;">
-                      <span>📦</span> รายการวัสดุอุปกรณ์ที่ใช้ในงานนี้ (${usedMats.length} รายการ)
-                    </b>
-                    ${usedMats.length ? `
-                      <div style="margin-top:10px; overflow-x:auto;">
-                        <table style="width:100%; border-collapse:collapse; font-size:14px;">
-                          <thead>
-                            <tr style="background:#f8fafc; text-align:left; color:#64748b;">
-                              <th style="padding:6px 10px; border-bottom:1px solid #e2e8f0;">วัสดุ</th>
-                              <th style="padding:6px 10px; border-bottom:1px solid #e2e8f0;">จำนวน</th>
-                              <th style="padding:6px 10px; border-bottom:1px solid #e2e8f0;">หน่วย</th>
-                              <th style="padding:6px 10px; border-bottom:1px solid #e2e8f0;">ผู้เบิก</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            ${usedMats.map(u => `
-                              <tr>
-                                <td style="padding:6px 10px; border-bottom:1px solid #f1f5f9; font-weight:600;">${esc(u.name)}</td>
-                                <td style="padding:6px 10px; border-bottom:1px solid #f1f5f9; color:#0284c7; font-weight:700;">${u.qty}</td>
-                                <td style="padding:6px 10px; border-bottom:1px solid #f1f5f9;">${esc(u.unit)}</td>
-                                <td style="padding:6px 10px; border-bottom:1px solid #f1f5f9; color:#64748b;">${esc(u.tech_name || '-')}</td>
-                              </tr>
-                            `).join('')}
-                          </tbody>
-                        </table>
-                      </div>
-                    ` : '<div class="mut" style="font-size:13px; margin-top:6px;">ไม่มีการเบิกใช้วัสดุอุปกรณ์</div>'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          `;
-        }).join('') : `
-          <div class="content-card" style="text-align:center; padding:40px; color:#64748b; font-size:16px;">
-            ${techDoneMonthFilter === 'all' ? 'ยังไม่มีประวัติงานที่ทำเสร็จ' : 'ไม่มีงานที่ทำเสร็จในเดือนที่เลือก'}
           </div>
         `}
       </div>
@@ -826,8 +918,7 @@ window.selectActStep = function(stepKey) {
       accepted: 'รับเรื่องแล้ว',
       doing: 'กำลังดำเนินการ',
       checking: 'ตรวจสอบงาน',
-      done: 'เสร็จสิ้น',
-      closed: 'ปิดงาน'
+      done: 'เสร็จสิ้น'
     };
     submitBtnText.textContent = `อัปเดตเป็น: ${stepNames[stepKey] || stepKey}`;
   }
@@ -836,9 +927,9 @@ window.selectActStep = function(stepKey) {
 window.openAct = function (id) {
   const t = T.find(x => x.id === id) || (typeof found !== 'undefined' && found?.id === id ? found : { id });
   
-  // กำหนดสเต็ปปัจจุบันของงาน
-  const validSteps = ['accepted', 'doing', 'checking', 'done', 'closed'];
-  const curStatus = validSteps.includes(t.status) ? t.status : 'doing';
+  // กำหนดสเต็ปปัจจุบันของงาน (สิ้นสุดที่ซ่อมเสร็จสิ้น)
+  const validSteps = ['accepted', 'doing', 'checking', 'done'];
+  const curStatus = validSteps.includes(t.status) ? t.status : (t.status === 'closed' ? 'done' : 'doing');
   
   // กำหนดสเต็ปเป้าหมายเริ่มต้น: ให้เลื่อนไปข้างหน้า 1 ขั้นโดยอัตโนมัติเพื่อให้ช่างกดอัปเดตได้ง่าย
   const curIdx = validSteps.indexOf(curStatus);
@@ -858,14 +949,14 @@ window.openAct = function (id) {
     : '-';
 
   const firstPhoto = (t.photos && t.photos.length) ? t.photos[0] : null;
+  const currentAsset = t.items?.[0]?.asset || t.asset_no || t.asset || '';
 
-  // กำหนดข้อมูลทั้ง 5 สเต็ปตามแบบ
+  // กำหนดข้อมูลสเต็ปการทำงาน (4 ขั้นตอนสิ้นสุดที่ซ่อมเสร็จสิ้น)
   const stepsDef = [
     { key: 'accepted', num: 1, icon: '📋', name: 'รับเรื่องแล้ว', defSub: 'รับเรื่องเรียบร้อย' },
     { key: 'doing', num: 2, icon: '🔧', name: 'กำลังดำเนินการ', defSub: 'เจ้าหน้าที่เข้าตรวจ/ซ่อม' },
     { key: 'checking', num: 3, icon: '✔️', name: 'ตรวจสอบงาน', defSub: 'รอการตรวจสอบ' },
-    { key: 'done', num: 4, icon: '👍', name: 'เสร็จสิ้น', defSub: 'ยังไม่เสร็จ' },
-    { key: 'closed', num: 5, icon: '⭐', name: 'ปิดงาน', defSub: 'ยังไม่ปิด' }
+    { key: 'done', num: 4, icon: '👍', name: 'เสร็จสิ้น', defSub: 'ยังไม่เสร็จ' }
   ];
 
   $('#dlg').className = 'act-dialog-wide';
@@ -947,6 +1038,16 @@ window.openAct = function (id) {
             }).join('')}
           </div>
 
+          <!-- กล่องระบุ/แก้ไขหมายเลขครุภัณฑ์ (สำหรับช่าง/แอดมิน) -->
+          <div style="margin-top:14px; margin-bottom:12px;">
+            <div class="act-note-header" style="background:#0b2545; border-radius:8px 8px 0 0;">
+              <span>🏷️</span> หมายเลขครุภัณฑ์ (ช่างและแอดมินสามารถระบุหรือแก้ไขเพิ่มเติมได้)
+            </div>
+            <div style="background:#fff; border:1px solid #cbd5e1; border-top:none; border-radius:0 0 8px 8px; padding:10px 14px;">
+              <input type="text" id="act_asset" class="form-control" value="${esc(currentAsset)}" placeholder="เช่น 7440-001-0001/67 (หากผู้แจ้งหาไม่เจอหรือไม่ทราบเลข)" style="font-size:15px; width:100%;">
+            </div>
+          </div>
+
           <!-- กล่องกรอกหมายเหตุเพิ่มเติม -->
           <div class="act-form-row">
             <div>
@@ -1002,6 +1103,7 @@ window.saveAct = async function (id) {
   const t = T.find(x => x.id === id);
   const targetStep = currentActStep || 'doing';
   const noteVal = ($('#d_n')?.value || '').trim();
+  const assetVal = ($('#act_asset')?.value || '').trim();
 
   toast(`กำลังอัปเดตสถานะเป็น "${ST[targetStep]?.[0] || targetStep}"...`);
 
@@ -1013,6 +1115,17 @@ window.saveAct = async function (id) {
 
   if (targetStep === 'done') {
     p.done_at = new Date().toISOString();
+  }
+
+  // อัปเดตหมายเลขครุภัณฑ์ (หากมีการกรอกหรือแก้ไข)
+  if (t) {
+    if (!t.items || !t.items.length) {
+      t.items = [{ item: t.title || 'รายการซ่อม', sym: t.details || '', asset: assetVal }];
+    } else {
+      t.items[0].asset = assetVal;
+    }
+    p.items = t.items;
+    p.asset_no = assetVal;
   }
 
   try {
