@@ -1100,42 +1100,28 @@ function vAll() {
         </span>
       </div>
 
-      <!-- Filter Bar: ปุ่มเลือกปี + เลือกเดือน + รีเซ็ต -->
-      <div class="done-filter-bar" style="background:#f8fafc; border:1.5px solid #cbd5e1; padding:12px 14px; border-radius:14px; margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <button type="button" class="btn ${!isPeriodFiltered ? 'btn-primary' : 'btn-outline'}" style="font-size:13.5px; font-weight:700; height:38px; border-radius:8px; padding:0 14px;" onclick="resetAdminAllPeriod()">
-            ทุกช่วงเวลา (${allTickets.length})
-          </button>
-          ${isPeriodFiltered ? `
-            <button type="button" class="btn btn-outline btn-sm" onclick="resetAdminAllPeriod()" style="color:var(--danger); border-color:#cbd5e1; height:38px; font-size:13px; font-weight:700;" title="ล้างตัวกรอง">
-              ✕ รีเซ็ตตัวกรอง
-            </button>
-          ` : ''}
+      <!-- Filter Bar: period-bar -->
+      <div class="period-bar">
+        <div class="period-bar-head">
+          <span class="period-bar-title">📅 ช่วงเวลา</span>
+          <span class="period-bar-count">${isPeriodFiltered ? `พบ ${periodFiltered.length} จาก ${allTickets.length} รายการ` : `ทั้งหมด ${allTickets.length} รายการ`}</span>
+          ${isPeriodFiltered ? `<button type="button" class="period-bar-reset" onclick="resetAdminAllPeriod()">✕ ล้างตัวกรอง</button>` : ''}
         </div>
-
-        <!-- แถวปีและเดือน อยู่บรรทัดเดียวกันเสมอทั้งจอมือถือแนวตั้งและคอมพิวเตอร์ -->
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; width:100%;">
-          <!-- 1. เลือกปี -->
-          <div style="display:flex; align-items:center; gap:6px; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:4px 8px;">
-            <label style="font-size:13px; font-weight:700; color:#0b2545; white-space:nowrap; margin:0;">📅 ปี:</label>
-            <select class="form-control" style="width:100%; height:34px; font-size:13px; font-weight:700; border:none; padding:2px 4px; background:transparent; cursor:pointer;" onchange="setAdminAllYear(this.value)">
-              <option value="all" ${adminAllYear === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
-              ${sortedYears.map(y => `
-                <option value="${y}" ${String(adminAllYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>
-              `).join('')}
+        <div class="period-bar-grid">
+          <label class="period-field">
+            <span class="period-field-label">ปี</span>
+            <select class="period-select" onchange="setAdminAllYear(this.value)">
+              <option value="all" ${adminAllYear === 'all' ? 'selected' : ''}>ทุกปี</option>
+              ${sortedYears.map(y => `<option value="${y}" ${String(adminAllYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543}</option>`).join('')}
             </select>
-          </div>
-
-          <!-- 2. เลือกเดือน -->
-          <div style="display:flex; align-items:center; gap:6px; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:4px 8px;">
-            <label style="font-size:13px; font-weight:700; color:#0b2545; white-space:nowrap; margin:0;">🗓️ เดือน:</label>
-            <select class="form-control" style="width:100%; height:34px; font-size:13px; font-weight:700; border:none; padding:2px 4px; background:transparent; cursor:pointer;" onchange="setAdminAllMonth(this.value)">
-              <option value="all" ${adminAllMonth === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
-              ${thaiMonths.map(m => `
-                <option value="${m.num}" ${adminAllMonth === m.num ? 'selected' : ''}>${m.name}</option>
-              `).join('')}
+          </label>
+          <label class="period-field">
+            <span class="period-field-label">เดือน</span>
+            <select class="period-select" onchange="setAdminAllMonth(this.value)">
+              <option value="all" ${adminAllMonth === 'all' ? 'selected' : ''}>ทุกเดือน</option>
+              ${thaiMonths.map(m => `<option value="${m.num}" ${adminAllMonth === m.num ? 'selected' : ''}>${m.name}</option>`).join('')}
             </select>
-          </div>
+          </label>
         </div>
       </div>
 

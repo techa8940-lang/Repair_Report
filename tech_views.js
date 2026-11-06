@@ -502,42 +502,28 @@ function vTechDone() {
         <span class="badge badge-done" style="font-size:15px; padding:6px 14px;">พบ ${list.length} งาน ${isFiltered ? `(จากทั้งหมด ${allCount} งาน)` : ''}</span>
       </div>
 
-      <!-- Filter Bar: ปุ่มดูทั้งหมด + Dropdown เลือกปี + Dropdown เลือกเดือน -->
-      <div class="done-filter-bar" style="background:#ffffff; border:1.5px solid #cbd5e1; padding:14px 18px; border-radius:14px; margin-bottom:18px;">
-        <div class="done-filter-left" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="done-filter-pill ${!isFiltered ? 'active' : ''}" onclick="resetTechDoneFilters()">
-            ดูทั้งหมด (${allCount})
-          </button>
+      <!-- Filter Bar: period-bar (ปี/เดือน สองคอลัมน์) -->
+      <div class="period-bar">
+        <div class="period-bar-head">
+          <span class="period-bar-title">📅 ช่วงเวลา</span>
+          <span class="period-bar-count">${isFiltered ? `พบ ${list.length} จาก ${allCount} รายการ` : `ทั้งหมด ${allCount} รายการ`}</span>
+          ${isFiltered ? `<button type="button" class="period-bar-reset" onclick="resetTechDoneFilters()">✕ ล้างตัวกรอง</button>` : ''}
         </div>
-
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <!-- 1. เลือกปี -->
-          <div style="display:flex; align-items:center; gap:6px;">
-            <label style="font-size:14px; font-weight:700; color:#0b2545;">📅 เลือกปี:</label>
-            <select class="done-month-select" style="min-width:140px; height:42px; font-size:14.5px; font-weight:700;" onchange="setTechDoneYear(this.value)">
-              <option value="all" ${techDoneYearFilter === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
-              ${sortedYears.map(y => `
-                <option value="${y}" ${String(techDoneYearFilter) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>
-              `).join('')}
+        <div class="period-bar-grid">
+          <label class="period-field">
+            <span class="period-field-label">ปี</span>
+            <select class="period-select" onchange="setTechDoneYear(this.value)">
+              <option value="all" ${techDoneYearFilter === 'all' ? 'selected' : ''}>ทุกปี</option>
+              ${sortedYears.map(y => `<option value="${y}" ${String(techDoneYearFilter) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543}</option>`).join('')}
             </select>
-          </div>
-
-          <!-- 2. เลือกเดือน -->
-          <div style="display:flex; align-items:center; gap:6px;">
-            <label style="font-size:14px; font-weight:700; color:#0b2545;">🗓️ เลือกเดือน:</label>
-            <select class="done-month-select" style="min-width:150px; height:42px; font-size:14.5px; font-weight:700;" onchange="setTechDoneMonth(this.value)">
-              <option value="all" ${techDoneMonthFilter === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
-              ${thaiMonths.map(m => `
-                <option value="${m.num}" ${techDoneMonthFilter === m.num ? 'selected' : ''}>${m.name}</option>
-              `).join('')}
+          </label>
+          <label class="period-field">
+            <span class="period-field-label">เดือน</span>
+            <select class="period-select" onchange="setTechDoneMonth(this.value)">
+              <option value="all" ${techDoneMonthFilter === 'all' ? 'selected' : ''}>ทุกเดือน</option>
+              ${thaiMonths.map(m => `<option value="${m.num}" ${techDoneMonthFilter === m.num ? 'selected' : ''}>${m.name}</option>`).join('')}
             </select>
-          </div>
-
-          ${isFiltered ? `
-            <button type="button" class="btn btn-outline btn-sm" onclick="resetTechDoneFilters()" style="color:var(--danger); border-color:#cbd5e1; height:40px; font-size:13.5px;" title="ล้างตัวกรอง">
-              ✕ รีเซ็ต
-            </button>
-          ` : ''}
+          </label>
         </div>
       </div>
 
