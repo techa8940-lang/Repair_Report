@@ -428,40 +428,47 @@ function vTechsManage() {
         </div>
 
         <!-- Mobile View Cards -->
-        <div class="mobile-only-cards" style="display:none; flex-direction:column; gap:12px; margin-top:14px; padding-bottom:60px;">
+        <div class="mobile-only-cards" style="display:none; flex-direction:column; gap:12px; margin-top:14px; padding-bottom:40px;">
           ${filtered.length ? filtered.map(t => {
             const isAdmin = t.role === 'admin';
             const isReporter = t.role === 'reporter' || (!t.role && t.role !== 'tech' && t.role !== 'admin');
             const isTech = t.role === 'tech';
+            let staffEmail = t.email || '';
+            if (!staffEmail || staffEmail === '-') {
+              try {
+                const emCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
+                staffEmail = emCache[t.id] || emCache[t.name] || '-';
+              } catch(e) { staffEmail = '-'; }
+            }
 
             return `
-              <div style="background:#ffffff; border:1.5px solid #e2e8f0; border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:0 1px 4px rgba(0,0,0,0.03);">
+              <div style="background:#ffffff; border:1.5px solid #e2e8f0; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:8px; box-shadow:0 1px 4px rgba(0,0,0,0.03);">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:8px;">
-                  <b style="font-size:16.5px; color:#0b2545;">${esc(t.name)}</b>
+                  <b style="font-size:16px; color:#0b2545;">${esc(t.name)}</b>
                   <span class="badge" style="font-weight:700; font-size:12px; ${isAdmin ? 'background:#fef3c7; color:#b45309; border:1px solid #fde68a;' : isReporter ? 'background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;' : 'background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;'}">
                     ${isAdmin ? '👑 ผู้ดูแลระบบ' : isReporter ? '👤 ผู้แจ้งซ่อม' : '👨‍🔧 ช่างเทคนิค'}
                   </span>
                 </div>
 
-                <div style="display:flex; flex-direction:column; gap:4px; font-size:14px; color:#475569;">
-                  <div>📧 <b>อีเมล:</b> <span style="font-family:monospace; color:#0f172a;">${esc(t.email || '-')}</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px; font-size:13.5px; color:#475569;">
+                  <div>📧 <b>อีเมล:</b> <span style="font-family:monospace; color:#0f172a;">${esc(staffEmail)}</span></div>
                   <div>📞 <b>เบอร์โทร:</b> <span style="color:#0284c7; font-weight:700;">${esc(t.tel || '-')}</span></div>
                   <div>💼 <b>ตำแหน่ง:</b> <span>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</span></div>
                   <div>🏢 <b>หน่วยงาน:</b> <span>${esc(t.org || '-')}</span></div>
                   ${isTech && t.skill ? `<div>🛠️ <b>เชี่ยวชาญ:</b> <span>${esc(t.skill)}</span></div>` : ''}
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #e2e8f0; padding-top:10px; margin-top:2px;">
-                  <span style="font-size:13.5px; font-weight:700;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #e2e8f0; padding-top:8px; margin-top:2px;">
+                  <span style="font-size:13px; font-weight:700;">
                     ${isTech ? `📋 รับแล้ว: <b style="color:var(--primary);">${t.jobs || 0}</b> งาน` : ''}
                   </span>
                   <div style="display:flex; gap:8px;">
                     ${isTech ? `
-                      <button class="btn btn-primary btn-sm" style="font-size:13px; padding:6px 12px; font-weight:700;" onclick="openAssignModal('${t.id}')">
+                      <button class="btn btn-primary btn-sm" style="font-size:12.5px; padding:5px 10px; font-weight:700;" onclick="openAssignModal('${t.id}')">
                         มอบหมาย
                       </button>
                     ` : ''}
-                    <button class="btn btn-outline btn-sm" style="font-size:13px; padding:6px 14px; font-weight:700; border-radius:8px; border-color:#0b2545; color:#0b2545; display:inline-flex; align-items:center; gap:4px;" onclick="openEditStaffModal('${t.id}')">
+                    <button class="btn btn-outline btn-sm" style="font-size:12.5px; padding:5px 12px; font-weight:700; border-radius:8px; border-color:#0b2545; color:#0b2545; display:inline-flex; align-items:center; gap:4px;" onclick="openEditStaffModal('${t.id}')">
                       ✏️ แก้ไขบัญชี
                     </button>
                   </div>
@@ -830,19 +837,30 @@ window.saveEditStaff = async function(e, id) {
 
   toast('กำลังบันทึกการแก้ไขบัญชี...');
 
+  // ส่งเฉพาะคอลัมน์ที่มีอยู่จริงใน profiles table เพื่อป้องกัน DB update error
   const updatePayload = {
     name,
     role,
     tel,
     org,
-    role_desc,
-    skill: role === 'tech' ? skill : null
+    skill: role === 'tech' ? (skill || 'ทั่วไป') : null
   };
 
   try {
-    await sb.from('profiles').update(updatePayload).eq('id', id);
+    const res = await sb.from('profiles').update(updatePayload).eq('id', id);
+    if (res?.error) console.warn('profiles update warning:', res.error);
   } catch (err) {
     console.warn('profiles update error:', err);
+  }
+
+  // อัปเดตตารางแคชอีเมล
+  if (email) {
+    try {
+      const emailCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
+      emailCache[id] = email;
+      if (name) emailCache[name] = email;
+      localStorage.setItem('nusp_staff_emails', JSON.stringify(emailCache));
+    } catch(e) {}
   }
 
   // อัปเดตใน allStaff
@@ -850,6 +868,7 @@ window.saveEditStaff = async function(e, id) {
     const target = allStaff.find(x => String(x.id) === String(id));
     if (target) {
       Object.assign(target, updatePayload);
+      target.role_desc = role_desc;
       if (email) target.email = email;
     }
   }
@@ -860,6 +879,8 @@ window.saveEditStaff = async function(e, id) {
     if (role === 'tech') {
       if (techIdx >= 0) {
         Object.assign(techs[techIdx], updatePayload);
+        techs[techIdx].role_desc = role_desc;
+        if (email) techs[techIdx].email = email;
       } else {
         const fullObj = (typeof allStaff !== 'undefined') ? allStaff.find(x => String(x.id) === String(id)) : null;
         if (fullObj) techs.push(fullObj);
@@ -901,9 +922,20 @@ window.executeDeleteStaff = async function(id) {
   toast('กำลังลบบัญชีผู้ใช้...');
   try {
     await sb.from('profiles').delete().eq('id', id);
+    await sb.from('profiles').update({ name: '[DELETED]', org: 'DELETED' }).eq('id', id);
   } catch(err) {
     console.warn('delete profile error:', err);
   }
+
+  // บันทึก id ที่ถูกลบไว้ใน localStorage เพื่อป้องกันไม่ให้ข้อมูลกลับมาแสดงเมื่อรีเฟรชหน้าเว็บ
+  try {
+    const deletedList = JSON.parse(localStorage.getItem('nusp_deleted_staff') || '[]');
+    if (!deletedList.includes(id)) {
+      deletedList.push(id);
+      localStorage.setItem('nusp_deleted_staff', JSON.stringify(deletedList));
+    }
+  } catch(e) {}
+
   if (typeof allStaff !== 'undefined') {
     const idx = allStaff.findIndex(x => x.id === id);
     if (idx >= 0) allStaff.splice(idx, 1);
@@ -1072,18 +1104,24 @@ function vAll() {
       </div>
 
       <!-- Filter Bar: ปุ่มเลือกปี + เลือกเดือน + รีเซ็ต -->
-      <div class="done-filter-bar" style="background:#f8fafc; border:1.5px solid #cbd5e1; padding:14px 18px; border-radius:14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="btn ${!isPeriodFiltered ? 'btn-primary' : 'btn-outline'}" style="font-size:14px; font-weight:700; height:40px; border-radius:8px;" onclick="resetAdminAllPeriod()">
+      <div class="done-filter-bar" style="background:#f8fafc; border:1.5px solid #cbd5e1; padding:12px 14px; border-radius:14px; margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <button type="button" class="btn ${!isPeriodFiltered ? 'btn-primary' : 'btn-outline'}" style="font-size:13.5px; font-weight:700; height:38px; border-radius:8px; padding:0 14px;" onclick="resetAdminAllPeriod()">
             ทุกช่วงเวลา (${allTickets.length})
           </button>
+          ${isPeriodFiltered ? `
+            <button type="button" class="btn btn-outline btn-sm" onclick="resetAdminAllPeriod()" style="color:var(--danger); border-color:#cbd5e1; height:38px; font-size:13px; font-weight:700;" title="ล้างตัวกรอง">
+              ✕ รีเซ็ตตัวกรอง
+            </button>
+          ` : ''}
         </div>
 
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <!-- แถวปีและเดือน อยู่บรรทัดเดียวกันเสมอทั้งจอมือถือแนวตั้งและคอมพิวเตอร์ -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; width:100%;">
           <!-- 1. เลือกปี -->
-          <div style="display:flex; align-items:center; gap:6px;">
-            <label style="font-size:14px; font-weight:700; color:#0b2545;">📅 เลือกปี:</label>
-            <select class="form-control" style="min-width:140px; height:40px; font-size:14px; font-weight:700; border-radius:8px;" onchange="setAdminAllYear(this.value)">
+          <div style="display:flex; align-items:center; gap:6px; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:4px 8px;">
+            <label style="font-size:13px; font-weight:700; color:#0b2545; white-space:nowrap; margin:0;">📅 ปี:</label>
+            <select class="form-control" style="width:100%; height:34px; font-size:13px; font-weight:700; border:none; padding:2px 4px; background:transparent; cursor:pointer;" onchange="setAdminAllYear(this.value)">
               <option value="all" ${adminAllYear === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
               ${sortedYears.map(y => `
                 <option value="${y}" ${String(adminAllYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>
@@ -1092,21 +1130,15 @@ function vAll() {
           </div>
 
           <!-- 2. เลือกเดือน -->
-          <div style="display:flex; align-items:center; gap:6px;">
-            <label style="font-size:14px; font-weight:700; color:#0b2545;">🗓️ เลือกเดือน:</label>
-            <select class="form-control" style="min-width:140px; height:40px; font-size:14px; font-weight:700; border-radius:8px;" onchange="setAdminAllMonth(this.value)">
+          <div style="display:flex; align-items:center; gap:6px; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:4px 8px;">
+            <label style="font-size:13px; font-weight:700; color:#0b2545; white-space:nowrap; margin:0;">🗓️ เดือน:</label>
+            <select class="form-control" style="width:100%; height:34px; font-size:13px; font-weight:700; border:none; padding:2px 4px; background:transparent; cursor:pointer;" onchange="setAdminAllMonth(this.value)">
               <option value="all" ${adminAllMonth === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
               ${thaiMonths.map(m => `
                 <option value="${m.num}" ${adminAllMonth === m.num ? 'selected' : ''}>${m.name}</option>
               `).join('')}
             </select>
           </div>
-
-          ${isPeriodFiltered ? `
-            <button type="button" class="btn btn-outline btn-sm" onclick="resetAdminAllPeriod()" style="color:var(--danger); border-color:#cbd5e1; height:40px; font-size:13.5px;" title="ล้างตัวกรอง">
-              ✕ รีเซ็ต
-            </button>
-          ` : ''}
         </div>
       </div>
 

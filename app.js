@@ -241,6 +241,7 @@ async function load(s) {
     const finalName = me.name || metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0];
     me.role = finalRole;
     me.name = finalName;
+    me.email = s.user.email || me.email || localStorage.getItem('last_logged_in_email') || '';
     try {
       await sb.from('profiles').upsert({ id: uid, name: finalName, role: finalRole }, { onConflict: 'id' });
     } catch(err) {}
@@ -249,12 +250,22 @@ async function load(s) {
     me = {
       id: uid,
       name: metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0],
-      role: role
+      role: role,
+      email: s.user.email || localStorage.getItem('last_logged_in_email') || ''
     };
     try {
       await sb.from('profiles').upsert({ id: uid, name: me.name, role: me.role }, { onConflict: 'id' });
     } catch(err) {}
   }
+
+  // อัปเดตตารางแคชอีเมลในระบบ
+  try {
+    const emailCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
+    if (uid && me.email) emailCache[uid] = me.email;
+    if (me.name && me.email) emailCache[me.name] = me.email;
+    localStorage.setItem('nusp_staff_emails', JSON.stringify(emailCache));
+  } catch(e) {}
+
   sessionStorage.setItem('repair_me', JSON.stringify(me));
   tab = me.role === 'admin' ? 'dashboard' : me.role === 'tech' ? 'pool' : 'home';
   await go();
@@ -326,7 +337,16 @@ async function go(silent = false) {
       window.U = U;
       if (me.role === 'admin') {
         const staffRes = await sb.from('profiles').select('*');
-        allStaff = staffRes.data || [];
+        const rawStaff = staffRes.data || [];
+        let deletedList = [];
+        try {
+          deletedList = JSON.parse(localStorage.getItem('nusp_deleted_staff') || '[]');
+        } catch(e) {}
+        allStaff = rawStaff.filter(u => 
+          !deletedList.includes(u.id) && 
+          u.org !== 'DELETED' && 
+          !(u.name && u.name.startsWith('[DELETED]'))
+        );
         techs = allStaff.filter(u => u.role === 'tech');
         window.allStaff = allStaff;
         window.techs = techs;
@@ -343,9 +363,14 @@ async function go(silent = false) {
 window.login = async function (e) {
   e.preventDefault();
   const f = new FormData(e.target);
+  const emailVal = (f.get('email') || '').trim();
   toast('กำลังตรวจสอบข้อมูลเข้าสู่ระบบ...');
-  const { data, error } = await sb.auth.signInWithPassword({ email: f.get('email'), password: f.get('pw') });
+  const { data, error } = await sb.auth.signInWithPassword({ email: emailVal, password: f.get('pw') });
   if (error) return toast('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
+  if (emailVal) {
+    localStorage.setItem('last_logged_in_email', emailVal);
+    localStorage.setItem('last_reporter_email', emailVal);
+  }
   load(data.session);
 };
 
@@ -488,9 +513,22 @@ window.getReporterInfo = function(t) {
     p = staff.find(x => x.name === rawName || x.name === cleanName || (cleanName && x.name && x.name.toLowerCase() === cleanName.toLowerCase()));
   }
 
-  // 3. หาจาก email ถ้าไม่ใช่ default user@nusp.or.th
-  if (!p && t.email && t.email !== 'user@nusp.or.th' && t.email !== '-' && t.email !== 'null') {
-    p = staff.find(x => x.email && x.email.toLowerCase() === t.email.toLowerCase());
+  // 3. ดึงแคชอีเมลที่เคยล็อกอินหรือลงทะเบียนไว้ในระบบ
+  let emailCache = {};
+  try {
+    emailCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
+  } catch(e) {}
+
+  // หา email จริงของผู้แจ้ง
+  let foundEmail = '';
+  if (t.user_id && emailCache[t.user_id]) foundEmail = emailCache[t.user_id];
+  if (!foundEmail && cleanName && emailCache[cleanName]) foundEmail = emailCache[cleanName];
+  if (!foundEmail && rawName && emailCache[rawName]) foundEmail = emailCache[rawName];
+  if (!foundEmail && p?.id && emailCache[p.id]) foundEmail = emailCache[p.id];
+  if (!foundEmail && p?.email && p.email !== 'user@nusp.or.th') foundEmail = p.email;
+  if (!foundEmail && t.email && t.email !== 'user@nusp.or.th' && t.email !== '-' && t.email !== 'null') foundEmail = t.email;
+  if (!foundEmail && me && (cleanName === me.name || (t.user_id && String(t.user_id) === String(me.id)))) {
+    foundEmail = me.email || '';
   }
 
   // สกัดหน่วยงานจากชื่อ เช่น "Kla (NU SEED)"
@@ -507,16 +545,11 @@ window.getReporterInfo = function(t) {
   // ดึงเบอร์โทรศัพท์ (ถ้าในตั๋วไม่มีหรือเป็น - ให้เอาจากโปรไฟล์)
   let tel = (t.tel && t.tel !== '-' && t.tel !== 'null') ? t.tel : (p?.tel || '-');
 
-  // ดึงอีเมล (ถ้าในตั๋วเป็น default หรือว่าง ให้เอาจากโปรไฟล์)
-  let email = (t.email && t.email !== '-' && t.email !== 'user@nusp.or.th' && t.email !== 'null')
-    ? t.email
-    : (p?.email || (t.email && t.email !== 'null' ? t.email : '-'));
-
   return {
     name: displayName,
     org: org,
     tel: tel,
-    email: email
+    email: foundEmail || (t.email && t.email !== 'null' ? t.email : '-')
   };
 };
 
@@ -607,12 +640,26 @@ function render() {
   const navItems = menuGroups[currentRoleView] || menuGroups.reporter;
 
   if (sidebarMenu) {
-    sidebarMenu.innerHTML = navItems.map(([k, icon, name]) => `
+    let sidebarContent = '';
+    if (me.role === 'admin') {
+      sidebarContent += `
+        <div class="mobile-drawer-switcher" style="padding:10px 12px; margin-bottom:12px; background:rgba(255,255,255,0.06); border-radius:10px; border:1px solid rgba(255,255,255,0.1);">
+          <div style="font-size:12px; font-weight:700; color:#cbd5e1; margin-bottom:6px;">🧪 สลับมุมมองระบบ:</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px;">
+            <button type="button" class="btn btn-sm ${adminView === 'admin' ? 'btn-primary' : 'btn-outline'}" style="font-size:11.5px; padding:6px 2px; ${adminView === 'admin' ? '' : 'color:#cbd5e1; border-color:rgba(255,255,255,0.2);'}" onclick="setAdminView('admin')">👑 แอดมิน</button>
+            <button type="button" class="btn btn-sm ${adminView === 'tech' ? 'btn-primary' : 'btn-outline'}" style="font-size:11.5px; padding:6px 2px; ${adminView === 'tech' ? '' : 'color:#cbd5e1; border-color:rgba(255,255,255,0.2);'}" onclick="setAdminView('tech')">🛠️ ช่าง</button>
+            <button type="button" class="btn btn-sm ${adminView === 'reporter' ? 'btn-primary' : 'btn-outline'}" style="font-size:11.5px; padding:6px 2px; ${adminView === 'reporter' ? '' : 'color:#cbd5e1; border-color:rgba(255,255,255,0.2);'}" onclick="setAdminView('reporter')">👤 ผู้แจ้ง</button>
+          </div>
+        </div>
+      `;
+    }
+    sidebarContent += navItems.map(([k, icon, name]) => `
       <button class="menu-link ${tab === k ? 'active' : ''}" onclick="setTab('${k}')">
         <span class="menu-icon">${icon}</span>
         <span>${name}</span>
       </button>
     `).join('');
+    sidebarMenu.innerHTML = sidebarContent;
   }
 
   // Render Mobile Bottom Navigation Bar (Very convenient for elderly & mobile screens)
@@ -639,10 +686,10 @@ function render() {
   if (me.role === 'admin') {
     topbarHtml += `
       <div class="admin-view-switcher" style="display:flex; align-items:center; gap:4px; background:var(--bg-subtle); padding:4px 8px; border-radius:var(--radius-md); border:1px solid var(--border);">
-        <span style="font-size:12.5px; font-weight:700; color:var(--text-muted); margin-right:2px;">🧪 สลับมุมมอง:</span>
-        <button type="button" class="btn btn-sm ${adminView === 'admin' ? 'btn-primary' : 'btn-outline'}" style="padding:4px 10px; font-size:12px;" onclick="setAdminView('admin')">👑 แอดมิน</button>
-        <button type="button" class="btn btn-sm ${adminView === 'tech' ? 'btn-primary' : 'btn-outline'}" style="padding:4px 10px; font-size:12px;" onclick="setAdminView('tech')">🛠️ ช่าง</button>
-        <button type="button" class="btn btn-sm ${adminView === 'reporter' ? 'btn-primary' : 'btn-outline'}" style="padding:4px 10px; font-size:12px;" onclick="setAdminView('reporter')">👤 ผู้แจ้ง</button>
+        <span class="switcher-label" style="font-size:12.5px; font-weight:700; color:var(--text-muted); margin-right:2px;">🧪 สลับมุมมอง:</span>
+        <button type="button" class="btn btn-sm ${adminView === 'admin' ? 'btn-primary' : 'btn-outline'}" style="padding:4px 8px; font-size:12px;" onclick="setAdminView('admin')" title="มุมมองแอดมิน">👑 <span class="view-btn-text">แอดมิน</span></button>
+        <button type="button" class="btn btn-sm ${adminView === 'tech' ? 'btn-primary' : 'btn-outline'}" style="padding:4px 8px; font-size:12px;" onclick="setAdminView('tech')" title="มุมมองช่าง">🛠️ <span class="view-btn-text">ช่าง</span></button>
+        <button type="button" class="btn btn-sm ${adminView === 'reporter' ? 'btn-primary' : 'btn-outline'}" style="padding:4px 8px; font-size:12px;" onclick="setAdminView('reporter')" title="มุมมองผู้แจ้ง">👤 <span class="view-btn-text">ผู้แจ้ง</span></button>
       </div>
     `;
   }

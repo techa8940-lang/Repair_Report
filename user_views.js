@@ -597,7 +597,7 @@ window.confirmSubmitReport = async function(e) {
 
     const userTel = telCombined || me?.tel || '';
     const userOrg = newReportDraft.org || me?.org || '';
-    const userEmail = (me?.email || 'user@nusp.or.th').toLowerCase();
+    const userEmail = (me?.email || localStorage.getItem('last_reporter_email') || localStorage.getItem('last_logged_in_email') || '').toLowerCase();
 
     const payload = {
       id: no,

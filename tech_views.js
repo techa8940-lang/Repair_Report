@@ -302,7 +302,7 @@ function vMine() {
   const allMyTasks = T.filter(t => 
     isDevOrAdmin 
       ? (t.tech_name === me?.name || t.tech_id === me?.id || me?.role === 'admin') 
-      : t.tech_id === me?.id
+      : (t.tech_id === me?.id || (me?.name && t.tech_name === me?.name))
   );
 
   // 2. คำนวณจำนวนงานในแต่ละขั้นตอน (สิ้นสุดที่ซ่อมเสร็จสิ้น)
@@ -321,7 +321,7 @@ function vMine() {
   // 3. กรองรายการตามขั้นตอนที่เลือก (เวลากดไปที่แต่ละขั้น ก็ให้ขึ้นแต่รายการที่อยู่ในขั้นนั้นอยู่)
   let filtered = allMyTasks;
   if (mineStepFilter !== 'all') {
-    filtered = allMyTasks.filter(t => t.status === mineStepFilter);
+    filtered = allMyTasks.filter(t => t.status === mineStepFilter || (mineStepFilter === 'done' && t.status === 'closed'));
   }
 
   // 4. จัดกลุ่มตามตำแหน่ง อาคารและชั้น
@@ -1159,7 +1159,6 @@ window.saveAct = async function (id) {
       t.items[0].asset = assetVal;
     }
     p.items = t.items;
-    p.asset_no = assetVal;
   }
 
   try {
