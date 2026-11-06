@@ -639,7 +639,7 @@ function vTechDone() {
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; font-size:14.5px; line-height:1.6; margin-bottom:14px;">
                       <div><b>🕒 วันที่ซ่อมเสร็จสิ้น:</b> <span style="font-weight:700; color:#15803d;">${esc(doneDateStr)}</span></div>
                       <div><b>👨‍🔧 ช่างผู้รับผิดชอบ:</b> <span style="font-weight:700; color:#0284c7;">${esc(t.tech_name || me?.name || '-')}</span></div>
-                      <div><b>💰 งบประมาณที่ใช้:</b> <span style="font-weight:700; color:#15803d;">${t.budget ? Number(t.budget).toLocaleString() + ' บาท' : '-'}</span></div>
+                      <div><b>💰 งบประมาณที่ใช้:</b> <span style="font-weight:700; color:#15803d;">${fmtTicketBudget(t.id)}</span></div>
                       <div><b>📝 บันทึกช่าง / หมายเหตุ:</b> ${t.note ? esc(t.note) : '-'}</div>
                     </div>
 

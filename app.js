@@ -64,6 +64,22 @@ window.REP = REP;
 window.INS = INS;
 window.MATS = MATS;
 
+// งบประมาณของใบงาน = ผลรวมงบที่ช่างกรอกในใบเบิกวัสดุ (usage.budget) ของใบงานนั้น
+// ไม่มีใบเบิกที่ระบุงบ -> null (หน้าจอแสดงเป็น -)
+window.ticketBudget = function (ticketId) {
+  let sum = 0, has = false;
+  (typeof U !== 'undefined' ? U : []).forEach(u => {
+    if (u.ticket_id !== ticketId || u.budget === null || u.budget === undefined || u.budget === '') return;
+    const n = Number(u.budget);
+    if (!isNaN(n)) { sum += n; has = true; }
+  });
+  return has ? sum : null;
+};
+window.fmtTicketBudget = function (ticketId) {
+  const b = window.ticketBudget(ticketId);
+  return b === null ? '-' : b.toLocaleString() + ' บาท';
+};
+
 var me = null, uid = null, tab = 'login', T = [], U = [], techs = [], allStaff = [], fil = 'accepted', fT = '', found = undefined, lastNo = '', armed = '', lastTrackEmail = '';
 window.allStaff = allStaff;
 var statM = new Date().toISOString().slice(0, 7); 
@@ -258,6 +274,11 @@ async function load(s) {
     } catch(err) {}
   }
 
+  // เก็บอีเมลลงตาราง profiles เพื่อให้ผู้แจ้งเห็นอีเมลช่างได้ (ต้องมีคอลัมน์ email — ดู add_profiles_email.sql)
+  if (me.email) {
+    try { await sb.from('profiles').update({ email: me.email }).eq('id', uid); } catch(err) {}
+  }
+
   // อัปเดตตารางแคชอีเมลในระบบ
   try {
     const emailCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
@@ -323,16 +344,39 @@ if (document.readyState === 'loading') {
 
 // ปิดการรีเฟรชหน้าอัตโนมัติตามคำขอ (อัปเดตเมื่อมีการกระทำ บันทึก หรือเปลี่ยนแท็บ)
 
+// ดึงข้อมูลทั้งตารางทีละหน้า (หน้าละ 100 แถว: 0-99, 100-199, ...) จนกว่าจะหมด
+// ข้อมูลเพิ่มขึ้นก็จะวนดึงหน้าเพิ่มตามไปเอง (จำกัดสูงสุด 200 หน้า = 20,000 แถว กันวนไม่รู้จบ)
+async function fetchAllRows(table, pageSize = 100, maxPages = 200) {
+  const run = async (orderIdToo) => {
+    let all = [];
+    for (let page = 0; page < maxPages; page++) {
+      const from = page * pageSize;
+      let q = sb.from(table).select('*').order('created_at', { ascending: false });
+      // เรียงรองด้วย id กันแถวที่เวลาเท่ากัน (เช่น เบิกหลายรายการพร้อมกัน) ตกหล่น/ซ้ำตรงรอยต่อหน้า
+      if (orderIdToo) q = q.order('id', { ascending: false });
+      const { data, error } = await q.range(from, from + pageSize - 1);
+      if (error) return { data: all, error };
+      all = all.concat(data || []);
+      if (!data || data.length < pageSize) break;
+    }
+    return { data: all, error: null };
+  };
+  let res = await run(true);
+  if (res.error) res = await run(false); // ตารางที่ไม่มีคอลัมน์ id
+  return res;
+}
+window.fetchAllRows = fetchAllRows;
+
 async function go(silent = false) {
   try {
     if (me && (me.role === 'admin' || me.role === 'tech')) {
-      const ticketsRes = await sb.from('tickets').select('*').order('created_at', { ascending: false }).limit(200);
+      const ticketsRes = await fetchAllRows('tickets');
       if (ticketsRes.error) {
         console.warn('tickets fetch warning:', ticketsRes.error);
       }
       T = ticketsRes.data || [];
       window.T = T;
-      const usageRes = await sb.from('usage').select('*').order('created_at', { ascending: false }).limit(200);
+      const usageRes = await fetchAllRows('usage');
       U = usageRes.data || [];
       window.U = U;
       if (me.role === 'admin') {
@@ -492,6 +536,39 @@ window.signOut = function () {
     else render();
     toast('ออกจากระบบเรียบร้อยแล้ว');
   }
+};
+
+
+// ดึงข้อมูลติดต่อช่างผู้รับผิดชอบ (เบอร์ + อีเมล) สำหรับแสดงให้ผู้แจ้งเห็น
+window.getTechContact = async function(t) {
+  if (!t || (!t.tech_id && !t.tech_name)) return null;
+  let tel = '', email = '';
+  const pool = (typeof allStaff !== 'undefined' && allStaff.length) ? allStaff : ((typeof techs !== 'undefined') ? techs : []);
+  let p = pool.find(x => (t.tech_id && String(x.id) === String(t.tech_id)) || (t.tech_name && x.name === t.tech_name)) || null;
+
+  // ผู้แจ้งไม่ได้โหลดรายชื่อช่างไว้ จึงดึงจากตาราง profiles โดยตรง
+  if (!p) {
+    try {
+      if (t.tech_id && window.isUUID(t.tech_id)) {
+        const r = await sb.from('profiles').select('*').eq('id', t.tech_id).maybeSingle();
+        if (r?.data) p = r.data;
+      }
+      if (!p && t.tech_name) {
+        const r = await sb.from('profiles').select('*').eq('name', t.tech_name).limit(1);
+        if (r?.data?.length) p = r.data[0];
+      }
+    } catch (e) {}
+  }
+  if (p) { tel = p.tel || ''; email = p.email || ''; }
+
+  // แคชอีเมลในเครื่อง (สำรอง)
+  if (!email) {
+    try {
+      const c = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
+      email = (p?.id && c[p.id]) || (t.tech_id && c[t.tech_id]) || (t.tech_name && c[t.tech_name]) || '';
+    } catch (e) {}
+  }
+  return { name: p?.name || t.tech_name || '', tel, email };
 };
 
 window.getReporterInfo = function(t) {

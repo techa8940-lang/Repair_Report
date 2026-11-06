@@ -1176,6 +1176,8 @@ window.quickTrack = async function (no, email) {
   }
 
   // นำข้อมูลที่ได้มาเปิดเป็น Pop-up Modal Dialog สวยงาม (ไม่มีปุ่มเบิกวัสดุ)
+  // ดึงเบอร์/อีเมลช่างผู้รับผิดชอบ (ถ้ามี) ก่อนเปิดป๊อปอัพ
+  try { data._techContact = await getTechContact(data); } catch (e) { data._techContact = null; }
   openReporterTicketModal(data);
 };
 
@@ -1286,6 +1288,8 @@ window.openReporterTicketModal = function(t) {
             ` : ''}
             ${t.tech_name ? `
               <div><b>ช่างผู้รับผิดชอบ:</b> <span style="color:#0284c7; font-weight:700;">${esc(t.tech_name)}</span></div>
+              <div><b>📞 เบอร์ช่าง:</b> ${(t._techContact && t._techContact.tel) ? `<a href="tel:${esc(String(t._techContact.tel).replace(/[^0-9+]/g, ''))}" style="color:#0284c7; font-weight:700; text-decoration:none;">${esc(t._techContact.tel)}</a>` : '<span style="color:#94a3b8;">-</span>'}</div>
+              <div><b>✉️ อีเมลช่าง:</b> ${(t._techContact && t._techContact.email) ? `<a href="mailto:${esc(t._techContact.email)}" style="color:#334155; text-decoration:none;">${esc(t._techContact.email)}</a>` : '<span style="color:#94a3b8;">-</span>'}</div>
             ` : ''}
           </div>
 

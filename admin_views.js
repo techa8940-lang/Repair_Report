@@ -1244,6 +1244,16 @@ window.openAdminTicketModal = function(id) {
   const photos = t.photos || [];
   const donePhotos = t.done_photos || [];
   const usedMats = (typeof U !== 'undefined' ? U : []).filter(u => u.ticket_id === t.id);
+  // ข้อมูลช่างผู้รับผิดชอบ (จากโปรไฟล์จริง: ค้นด้วย tech_id ก่อน ไม่เจอค่อยใช้ชื่อ)
+  const staffPool = (typeof allStaff !== 'undefined' && allStaff.length) ? allStaff : (typeof techs !== 'undefined' ? techs : []);
+  const techProfile = staffPool.find(x => t.tech_id && String(x.id) === String(t.tech_id))
+    || staffPool.find(x => t.tech_name && x.name === t.tech_name) || null;
+  let techEmail = techProfile?.email || '';
+  if (!techEmail && techProfile?.id) {
+    try { techEmail = (JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}'))[techProfile.id] || ''; } catch (e) {}
+  }
+  const techTel = techProfile?.tel || '';
+  const ticketBudgetText = fmtTicketBudget(t.id);
   const stConfig = (typeof ST !== 'undefined' && ST[t.status]) ? ST[t.status] : (t.status === 'closed' ? ['เสร็จสิ้น', '#10b981'] : ['รอดำเนินการ', '#64748b']);
 
   // Stepper HTML
@@ -1336,6 +1346,9 @@ window.openAdminTicketModal = function(id) {
 
           <div style="font-size:15px; line-height:1.6; margin-bottom:14px;">
             <div><b>ช่างผู้รับผิดชอบ:</b> <span style="font-weight:700; color:#ea580c;">${esc(t.tech_name || 'ยังไม่ได้มอบหมาย')}</span></div>
+            <div style="margin-top:6px;"><b>📞 เบอร์ช่าง:</b> <span style="color:#0f172a;">${techTel ? esc(techTel) : '-'}</span></div>
+            <div style="margin-top:6px;"><b>✉️ อีเมลช่าง:</b> <span style="color:#0f172a;">${techEmail ? esc(techEmail) : '-'}</span></div>
+            <div style="margin-top:6px;"><b>💰 งบประมาณที่ใช้:</b> <span style="font-weight:700; color:#15803d;">${ticketBudgetText}</span></div>
             ${t.note ? `<div style="margin-top:6px;"><b>หมายเหตุช่าง:</b> <span style="color:#0f172a;">${esc(t.note)}</span></div>` : ''}
           </div>
 
@@ -1360,7 +1373,7 @@ window.openAdminTicketModal = function(id) {
               <div class="nusp-table-wrapper">
                 <table class="nusp-table" style="font-size:13.5px;">
                   <thead>
-                    <tr><th>ชื่อวัสดุ</th><th>จำนวน</th><th>หน่วย</th><th>ผู้เบิก</th></tr>
+                    <tr><th>ชื่อวัสดุ</th><th>จำนวน</th><th>หน่วย</th><th style="text-align:right;">งบที่ใช้ (บาท)</th><th>ผู้เบิก</th></tr>
                   </thead>
                   <tbody>
                     ${usedMats.map(u => `
@@ -1368,6 +1381,7 @@ window.openAdminTicketModal = function(id) {
                         <td style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
                         <td style="font-weight:800; color:#0284c7;">${u.qty}</td>
                         <td>${esc(u.unit || 'ชิ้น')}</td>
+                        <td style="text-align:right; font-weight:700; color:#15803d;">${window.budgetOf(u) === null ? '-' : window.budgetOf(u).toLocaleString()}</td>
                         <td>${esc(u.tech_name || '-')}</td>
                       </tr>
                     `).join('')}
@@ -1379,6 +1393,14 @@ window.openAdminTicketModal = function(id) {
         </div>
 
         <!-- Card 3: การจัดการงาน (มอบหมายช่าง / อัปเดตสถานะ / ลบงาน) -->
+        <!-- งานที่เสร็จสิ้น/ยกเลิกแล้ว: ไม่แสดงปุ่มมอบหมาย/อัปเดตสถานะ/ลบ เพื่อกันแก้ประวัติและงบโดยไม่ตั้งใจ -->
+        ${['done', 'closed', 'deleted'].includes(t.status) ? `
+          <div style="display:flex; justify-content:flex-end;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelector('#dlg').close()">
+              ปิดหน้าต่าง
+            </button>
+          </div>
+        ` : `
         <div style="background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:12px; padding:18px;">
           <h4 style="font-size:16px; font-weight:800; color:#0b2545; margin:0 0 12px 0;">⚙️ จัดการงานซ่อม</h4>
           
@@ -1409,6 +1431,7 @@ window.openAdminTicketModal = function(id) {
             </div>
           </div>
         </div>
+        `}
       </div>
     </div>
   `;
@@ -1503,13 +1526,16 @@ let stockYear = 'all';
 let stockMonth = 'all';
 let stockTech = '';
 let stockSearch = '';
+let stockPage = 1;
+const STOCK_PAGE_SIZE = 100;
+window.setStockPage = function(p) { stockPage = Math.max(1, Number(p) || 1); render(); };
 
-window.setStockYear = function(y) { stockYear = y; render(); };
-window.setStockMonth = function(m) { stockMonth = m; render(); };
-window.setStockTech = function(t) { stockTech = t; render(); };
-window.setStockSearch = function(q) { stockSearch = (q || '').trim(); render(); };
-window.resetStockSearch = function() { stockSearch = ''; render(); };
-window.resetStockPeriod = function() { stockYear = 'all'; stockMonth = 'all'; stockTech = ''; stockSearch = ''; render(); };
+window.setStockYear = function(y) { stockYear = y; stockPage = 1; render(); };
+window.setStockMonth = function(m) { stockMonth = m; stockPage = 1; render(); };
+window.setStockTech = function(t) { stockTech = t; stockPage = 1; render(); };
+window.setStockSearch = function(q) { stockSearch = (q || '').trim(); stockPage = 1; render(); };
+window.resetStockSearch = function() { stockSearch = ''; stockPage = 1; render(); };
+window.resetStockPeriod = function() { stockYear = 'all'; stockMonth = 'all'; stockTech = ''; stockSearch = ''; stockPage = 1; render(); };
 
 const MAT_CAT_MAP = {
   'สายไฟ VCT': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
@@ -1601,6 +1627,12 @@ function vStock() {
     }
     return true;
   });
+
+  // แบ่งหน้าตาราง: หน้าละ 100 รายการ (ยอดรวม/กราฟยังคำนวณจากทุกรายการที่กรองไว้)
+  const stockTotalPages = Math.max(1, Math.ceil(filteredUsage.length / STOCK_PAGE_SIZE));
+  if (stockPage > stockTotalPages) stockPage = stockTotalPages;
+  const stockFrom = (stockPage - 1) * STOCK_PAGE_SIZE;
+  const pageUsage = filteredUsage.slice(stockFrom, stockFrom + STOCK_PAGE_SIZE);
 
   // คำนวณสรุปสถิติ & สัดส่วนงบประมาณ
   let totalCost = 0;
@@ -1855,7 +1887,7 @@ function vStock() {
               </tr>
             </thead>
             <tbody>
-              ${filteredUsage.length ? filteredUsage.map(u => {
+              ${pageUsage.length ? pageUsage.map(u => {
                 const info = getMatInfo(u.name);
                 const qty = Number(u.qty) || 1;
                 const dateStr = u.created_at ? fmt(u.created_at) : (u.date || '-');
@@ -1895,6 +1927,20 @@ function vStock() {
             </tbody>
           </table>
         </div>
+        ${stockTotalPages > 1 ? `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:14px 18px; border-top:1px solid #e2e8f0; background:#f8fafc;">
+            <span style="font-size:14px; color:#475569; font-weight:600;">
+              แสดงรายการที่ ${stockFrom + 1}–${Math.min(stockFrom + STOCK_PAGE_SIZE, filteredUsage.length)} จากทั้งหมด ${filteredUsage.length} รายการ (หน้า ${stockPage}/${stockTotalPages})
+            </span>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-outline btn-sm" ${stockPage <= 1 ? 'disabled' : ''} onclick="setStockPage(${stockPage - 1})">&lt; ก่อนหน้า</button>
+              ${Array.from({ length: stockTotalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === stockTotalPages || Math.abs(p - stockPage) <= 2)
+                .map((p, i, arr) => `${i > 0 && p - arr[i - 1] > 1 ? '<span style="padding:6px 4px; color:#94a3b8;">…</span>' : ''}<button type="button" class="btn btn-sm ${p === stockPage ? 'btn-primary' : 'btn-outline'}" onclick="setStockPage(${p})">${p}</button>`).join('')}
+              <button type="button" class="btn btn-outline btn-sm" ${stockPage >= stockTotalPages ? 'disabled' : ''} onclick="setStockPage(${stockPage + 1})">ถัดไป &gt;</button>
+            </div>
+          </div>
+        ` : ''}
       </div>
     </div>
   `;
@@ -2053,7 +2099,7 @@ function vAssetCheck() {
     const first = rawSearchResults[0];
     const matchedAssetCode = first.items?.[0]?.asset || first.asset_no || first.asset || assetSearchKeyword;
     const equipName = (typeof getTicketTitle === 'function' ? getTicketTitle(first) : (first.items?.[0]?.item || first.title || first.sub_type || first.cat || 'ครุภัณฑ์'));
-    const totalBudget = searchResults.reduce((sum, t) => sum + (Number(t.budget || t.cost || 0)), 0);
+    const totalBudget = searchResults.reduce((sum, t) => sum + (window.ticketBudget(t.id) || 0), 0);
     const allTechs = [...new Set(searchResults.map(t => t.tech_name).filter(Boolean))];
     const ticketIds = searchResults.map(t => t.id);
     const usedMats = (typeof U !== 'undefined' ? U : []).filter(u => ticketIds.includes(u.ticket_id));
@@ -2170,7 +2216,7 @@ function vAssetCheck() {
               <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px 14px;">
                 <div style="font-size:12.5px; color:#166534; font-weight:700;">งบประมาณที่ใช้รวม</div>
                 <div style="font-size:20px; font-weight:800; color:#15803d; margin-top:4px;">
-                  ${assetSummary.totalBudget > 0 ? assetSummary.totalBudget.toLocaleString() + ' บาท' : 'เบิกตามพัสดุ'}
+                  ${assetSummary.totalBudget > 0 ? assetSummary.totalBudget.toLocaleString() + ' บาท' : '-'}
                 </div>
               </div>
               <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:12px 14px;">
@@ -2254,7 +2300,7 @@ function vAssetCheck() {
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; font-size:14.5px; line-height:1.6; margin-bottom:10px;">
                       <div><b>หัวข้อปัญหา:</b> <span style="color:#0b2545; font-weight:700;">${esc(getTicketTitle(t))}</span></div>
                       <div><b>ช่างผู้ดำเนินการ:</b> <span style="color:#0284c7; font-weight:700;">👨‍🔧 ${esc(t.tech_name || 'ช่างซ่อมบำรุง')}</span></div>
-                      <div><b>งบประมาณที่ใช้:</b> <span style="color:#15803d; font-weight:700;">${t.budget ? Number(t.budget).toLocaleString() + ' บาท' : 'เบิกตามพัสดุ'}</span></div>
+                      <div><b>งบประมาณที่ใช้:</b> <span style="color:#15803d; font-weight:700;">${fmtTicketBudget(t.id)}</span></div>
                       <div><b>ผู้แจ้งซ่อม:</b> ${esc(t.name || '-')}</div>
                     </div>
 
@@ -2270,7 +2316,7 @@ function vAssetCheck() {
                         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
                           ${ticketMats.map(m => `
                             <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:13px; padding:3px 10px;">
-                              ${esc(m.name)}: <b>${m.qty} ${esc(m.unit || 'ชิ้น')}</b> (โดย ${esc(m.tech_name)})
+                              ${esc(m.name)}: <b>${m.qty} ${esc(m.unit || 'ชิ้น')}</b> · งบ ${window.budgetOf(m) === null ? '-' : window.budgetOf(m).toLocaleString() + ' บาท'} (โดย ${esc(m.tech_name)})
                             </span>
                           `).join('')}
                         </div>
