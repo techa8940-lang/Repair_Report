@@ -1095,8 +1095,8 @@ const card = (t, x = '') => {
 
 function steps(t) {
   if (t.status === 'deleted') return '';
-  const o = ['accepted', 'doing', 'checking', 'done'];
-  const curSt = t.status === 'closed' ? 'done' : t.status;
+  const o = ['accepted', 'doing', 'done'];
+  const curSt = t.status === 'closed' ? 'done' : (t.status === 'checking' ? 'doing' : t.status);
   const i = o.indexOf(curSt);
   const h = {};
   (t.history || []).forEach(x => { if (x.s) h[x.s] = x.at; });

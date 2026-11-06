@@ -1064,9 +1064,7 @@ function vAll() {
   } else if (fil === 'done') {
     L = periodFiltered.filter(t => t.status === 'done' || t.status === 'closed');
   } else if (fil === 'doing') {
-    L = periodFiltered.filter(t => t.status === 'doing');
-  } else if (fil === 'checking') {
-    L = periodFiltered.filter(t => t.status === 'checking');
+    L = periodFiltered.filter(t => t.status === 'doing' || t.status === 'checking');
   } else if (fil === 'accepted') {
     L = periodFiltered.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status)));
   } else {
@@ -1074,8 +1072,7 @@ function vAll() {
   }
 
   const acceptedCount = periodFiltered.filter(t => t.status === 'accepted' || t.status === 'pending' || !t.status || (!['doing', 'checking', 'done', 'closed', 'deleted'].includes(t.status))).length;
-  const doingCount = periodFiltered.filter(t => t.status === 'doing').length;
-  const checkingCount = periodFiltered.filter(t => t.status === 'checking').length;
+  const doingCount = periodFiltered.filter(t => t.status === 'doing' || t.status === 'checking').length;
   const doneCount = periodFiltered.filter(t => t.status === 'done' || t.status === 'closed').length;
   const deletedCount = periodFiltered.filter(t => t.status === 'deleted').length;
 
@@ -1167,9 +1164,6 @@ function vAll() {
         </button>
         <button class="filter-pill ${fil === 'doing' ? 'active' : ''}" onclick="setFil('doing')">
           กำลังดำเนินการ (${doingCount})
-        </button>
-        <button class="filter-pill ${fil === 'checking' ? 'active' : ''}" onclick="setFil('checking')">
-          ตรวจสอบงาน (${checkingCount})
         </button>
         <button class="filter-pill ${fil === 'done' ? 'active' : ''}" onclick="setFil('done')">
           เสร็จสิ้น (${doneCount})
@@ -1518,29 +1512,37 @@ window.resetStockSearch = function() { stockSearch = ''; render(); };
 window.resetStockPeriod = function() { stockYear = 'all'; stockMonth = 'all'; stockTech = ''; stockSearch = ''; render(); };
 
 const MAT_CAT_MAP = {
-  'สายไฟ VCT': { cat: 'วัสดุไฟฟ้า', price: 45, unit: 'เมตร', color: '#3b82f6' },
-  'สายไฟ': { cat: 'วัสดุไฟฟ้า', price: 45, unit: 'เมตร', color: '#3b82f6' },
-  'เบรกเกอร์': { cat: 'วัสดุไฟฟ้า', price: 350, unit: 'ตัว', color: '#3b82f6' },
-  'หลอดไฟ LED': { cat: 'วัสดุไฟฟ้า', price: 150, unit: 'หลอด', color: '#3b82f6' },
-  'บัลลาสต์/สตาร์ทเตอร์': { cat: 'วัสดุไฟฟ้า', price: 80, unit: 'ตัว', color: '#3b82f6' },
-  'สวิตช์ไฟ': { cat: 'วัสดุไฟฟ้า', price: 120, unit: 'ตัว', color: '#3b82f6' },
-  'ปลั๊กไฟ': { cat: 'วัสดุไฟฟ้า', price: 90, unit: 'ตัว', color: '#3b82f6' },
-  'เทปพันสายไฟ': { cat: 'วัสดุไฟฟ้า', price: 35, unit: 'ม้วน', color: '#3b82f6' },
-  'ท่อ PVC': { cat: 'วัสดุก่อสร้าง', price: 65, unit: 'เส้น', color: '#f97316' },
-  'ปูนซีเมนต์': { cat: 'วัสดุก่อสร้าง', price: 160, unit: 'ถุง', color: '#f97316' },
-  'สีทาภายใน': { cat: 'วัสดุก่อสร้าง', price: 450, unit: 'ถัง', color: '#f97316' },
-  'ก๊อกน้ำ': { cat: 'วัสดุประปา', price: 180, unit: 'ตัว', color: '#10b981' },
-  'วาล์วน้ำ': { cat: 'วัสดุประปา', price: 120, unit: 'ตัว', color: '#10b981' },
-  'สายฉีดชำระ': { cat: 'วัสดุประปา', price: 160, unit: 'ชุด', color: '#10b981' },
-  'น้ำยาแอร์': { cat: 'วัสดุอื่นๆ', price: 450, unit: 'กก.', color: '#8b5cf6' }
+  'สายไฟ VCT': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'สายไฟ': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'เบรกเกอร์': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'หลอดไฟ LED': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'บัลลาสต์/สตาร์ทเตอร์': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'สวิตช์ไฟ': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'ปลั๊กไฟ': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'เทปพันสายไฟ': { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' },
+  'ท่อ PVC': { cat: 'วัสดุก่อสร้าง', color: '#f97316' },
+  'ปูนซีเมนต์': { cat: 'วัสดุก่อสร้าง', color: '#f97316' },
+  'สีทาภายใน': { cat: 'วัสดุก่อสร้าง', color: '#f97316' },
+  'ก๊อกน้ำ': { cat: 'วัสดุประปา', color: '#10b981' },
+  'วาล์วน้ำ': { cat: 'วัสดุประปา', color: '#10b981' },
+  'สายฉีดชำระ': { cat: 'วัสดุประปา', color: '#10b981' },
+  'น้ำยาแอร์': { cat: 'วัสดุอื่นๆ', color: '#8b5cf6' }
 };
+
+// งบประมาณที่ช่างกรอกจริงในใบเบิก (ถ้าไม่มีค่า = null แสดงเป็น -)
+window.budgetOf = function (u) {
+  if (!u || u.budget === null || u.budget === undefined || u.budget === '') return null;
+  const n = Number(u.budget);
+  return isNaN(n) ? null : n;
+};
+const fmtBudget = u => { const b = window.budgetOf(u); return b === null ? '-' : '฿' + b.toLocaleString(); };
 
 function getMatInfo(name) {
   if (MAT_CAT_MAP[name]) return MAT_CAT_MAP[name];
-  if (/ไฟ|หลอด|เบรกเกอร์|สวิตช์|ปลั๊ก|สายไฟ|บัลลาสต์/i.test(name)) return { cat: 'วัสดุไฟฟ้า', price: 120, unit: 'ชิ้น', color: '#3b82f6' };
-  if (/ท่อ|ก๊อก|วาล์ว|ชำระ|ประปา|น้ำ/i.test(name)) return { cat: 'วัสดุประปา', price: 95, unit: 'ชิ้น', color: '#10b981' };
-  if (/ปูน|สี|ฝ้า|ไม้|ประตู|หน้าต่าง|กระจก|กระเบื้อง/i.test(name)) return { cat: 'วัสดุก่อสร้าง', price: 200, unit: 'ชิ้น', color: '#f97316' };
-  return { cat: 'วัสดุอื่นๆ', price: 100, unit: 'ชิ้น', color: '#8b5cf6' };
+  if (/ไฟ|หลอด|เบรกเกอร์|สวิตช์|ปลั๊ก|สายไฟ|บัลลาสต์/i.test(name)) return { cat: 'วัสดุไฟฟ้า', color: '#3b82f6' };
+  if (/ท่อ|ก๊อก|วาล์ว|ชำระ|ประปา|น้ำ/i.test(name)) return { cat: 'วัสดุประปา', color: '#10b981' };
+  if (/ปูน|สี|ฝ้า|ไม้|ประตู|หน้าต่าง|กระจก|กระเบื้อง/i.test(name)) return { cat: 'วัสดุก่อสร้าง', color: '#f97316' };
+  return { cat: 'วัสดุอื่นๆ', color: '#8b5cf6' };
 }
 
 function vStock() {
@@ -1612,8 +1614,7 @@ function vStock() {
 
   filteredUsage.forEach(u => {
     const info = getMatInfo(u.name);
-    const qty = Number(u.qty) || 1;
-    const cost = u.cost ? Number(u.cost) : (qty * info.price);
+    const cost = window.budgetOf(u) || 0;
     totalCost += cost;
     catBreakdown[info.cat] = (catBreakdown[info.cat] || 0) + cost;
     if (u.tech_name) activeTechs.add(u.tech_name);
@@ -1857,7 +1858,6 @@ function vStock() {
               ${filteredUsage.length ? filteredUsage.map(u => {
                 const info = getMatInfo(u.name);
                 const qty = Number(u.qty) || 1;
-                const cost = u.cost ? Number(u.cost) : (qty * info.price);
                 const dateStr = u.created_at ? fmt(u.created_at) : (u.date || '-');
 
                 return `
@@ -1878,10 +1878,10 @@ function vStock() {
                       </span>
                     </td>
                     <td style="font-weight:800; color:#0284c7; white-space:nowrap; text-align:center;">
-                      ${qty} ${esc(u.unit || info.unit)}
+                      ${qty} ${esc(u.unit || '-')}
                     </td>
                     <td style="font-weight:800; color:#15803d; white-space:nowrap; text-align:right;">
-                      ฿${cost.toLocaleString()}
+                      ${fmtBudget(u)}
                     </td>
                   </tr>
                 `;
@@ -1903,10 +1903,8 @@ function vStock() {
 window.csv = function () {
   const c = s => '"' + String(s ?? '').replace(/"/g, '""') + '"', r = stockTech ? U.filter(u => u.tech_name === stockTech) : U;
   const txt = '\uFEFFวันที่,ชื่อช่าง,เลขซ่อม,รายการวัสดุ,จำนวน,หน่วย,งบประมาณ\n' + r.map(u => {
-    const info = getMatInfo(u.name);
-    const qty = Number(u.qty) || 1;
-    const cost = u.cost ? Number(u.cost) : (qty * info.price);
-    return [fmt(u.created_at), u.tech_name, u.ticket_id, u.name, u.qty, u.unit || info.unit, cost].map(c).join(',');
+    const b = window.budgetOf(u);
+    return [fmt(u.created_at), u.tech_name, u.ticket_id, u.name, u.qty, u.unit || '-', b === null ? '-' : b].map(c).join(',');
   }).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv' })); a.download = 'material-usage.csv'; a.click();
 };

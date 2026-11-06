@@ -309,19 +309,18 @@ function vMine() {
   const stepsDef = [
     { key: 'accepted', num: 1, name: 'รับเรื่องแล้ว', icon: '📋' },
     { key: 'doing', num: 2, name: 'กำลังดำเนินการ', icon: '🔧' },
-    { key: 'checking', num: 3, name: 'ตรวจสอบงาน', icon: '✔️' },
-    { key: 'done', num: 4, name: 'ซ่อมเสร็จสิ้น', icon: '👍' }
+    { key: 'done', num: 3, name: 'ซ่อมเสร็จสิ้น', icon: '👍' }
   ];
 
   const countMap = {};
   stepsDef.forEach(s => {
-    countMap[s.key] = allMyTasks.filter(t => (t.status === s.key || (s.key === 'done' && t.status === 'closed'))).length;
+    countMap[s.key] = allMyTasks.filter(t => (t.status === s.key || (s.key === 'done' && t.status === 'closed') || (s.key === 'doing' && t.status === 'checking'))).length;
   });
 
   // 3. กรองรายการตามขั้นตอนที่เลือก (เวลากดไปที่แต่ละขั้น ก็ให้ขึ้นแต่รายการที่อยู่ในขั้นนั้นอยู่)
   let filtered = allMyTasks;
   if (mineStepFilter !== 'all') {
-    filtered = allMyTasks.filter(t => t.status === mineStepFilter || (mineStepFilter === 'done' && t.status === 'closed'));
+    filtered = allMyTasks.filter(t => t.status === mineStepFilter || (mineStepFilter === 'done' && t.status === 'closed') || (mineStepFilter === 'doing' && t.status === 'checking'));
   }
 
   // 4. จัดกลุ่มตามตำแหน่ง อาคารและชั้น
@@ -742,7 +741,7 @@ window.matRowChange = function (sel, idx) {
   if (customInput) customInput.style.display = sel.value === 'อื่นๆ' ? 'block' : 'none';
 };
 
-window.addMatRow = function (name = '', qty = '', unit = '') {
+window.addMatRow = function (name = '', qty = '', unit = '', budget = '') {
   mRowCounter++;
   const idx = mRowCounter;
   const matOpts = MATS.map(m => `<option value="${m}" ${name === m ? 'selected' : ''}>${m}</option>`).join('');
@@ -766,6 +765,10 @@ window.addMatRow = function (name = '', qty = '', unit = '') {
       <div style="flex:1; min-width:95px;">
         <label style="font-size:13px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">หน่วยนับ</label>
         <input class="form-control m-unit" value="${esc(unit)}" placeholder="เช่น ชิ้น, ม้วน" style="padding:10px 12px; font-size:15px; height:46px;">
+      </div>
+      <div style="flex:1; min-width:120px;">
+        <label style="font-size:13px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">งบที่ใช้ (บาท)</label>
+        <input class="form-control m-budget" type="number" min="0" step="any" value="${budget}" placeholder="ไม่ระบุก็ได้" style="padding:10px 12px; font-size:16px; font-weight:700; color:#15803d; height:46px;">
       </div>
       <div style="width:42px; text-align:center; padding-top:20px;">
         <button type="button" class="btn btn-outline btn-sm" style="color:var(--danger); border-color:#cbd5e1; width:40px; height:40px; padding:0; font-size:16px;" onclick="removeMatRow(${idx})" title="ลบแถวนี้">✕</button>
@@ -826,6 +829,7 @@ window.openMat = function (id) {
                   <th>ชื่อวัสดุ / อุปกรณ์</th>
                   <th style="text-align:right;">จำนวนที่เบิก</th>
                   <th>หน่วย</th>
+                  <th style="text-align:right;">งบที่ใช้ (บาท)</th>
                   <th>ผู้ทำรายการเบิก</th>
                   <th>วัน-เวลา</th>
                 </tr>
@@ -837,6 +841,7 @@ window.openMat = function (id) {
                     <td style="font-weight:700; color:#0f172a; font-size:15.5px;">${esc(u.name)}</td>
                     <td style="text-align:right;" class="mat-qty-highlight">${u.qty}</td>
                     <td style="font-weight:600; color:#475569;">${esc(u.unit)}</td>
+                    <td style="text-align:right; font-weight:700; color:#15803d;">${(u.budget !== null && u.budget !== undefined && u.budget !== '' && !isNaN(Number(u.budget))) ? Number(u.budget).toLocaleString() : '-'}</td>
                     <td style="color:#0369a1; font-weight:600;">${esc(u.tech_name || 'ช่างซ่อมบำรุง')}</td>
                     <td style="color:#64748b; font-size:13.5px;">${fmt(u.created_at)}</td>
                   </tr>
@@ -893,6 +898,8 @@ window.saveMat = async function (id) {
     if (name === 'อื่นๆ') name = (r.querySelector('.m-custom').value || '').trim();
     const qty = parseFloat(r.querySelector('.m-qty').value);
     const unit = (r.querySelector('.m-unit').value || '').trim();
+    const budgetRaw = (r.querySelector('.m-budget')?.value || '').trim();
+    const budget = budgetRaw !== '' && !isNaN(Number(budgetRaw)) && Number(budgetRaw) >= 0 ? Number(budgetRaw) : null;
 
     if (name && qty > 0) {
       itemsToSave.push({
@@ -900,6 +907,7 @@ window.saveMat = async function (id) {
         name: name,
         qty: qty,
         unit: unit || 'ชิ้น',
+        budget: budget,
         tech_name: me?.name || 'ช่างซ่อมบำรุง',
         created_at: new Date().toISOString()
       });
@@ -911,16 +919,19 @@ window.saveMat = async function (id) {
   toast('กำลังบันทึกการเบิก ' + itemsToSave.length + ' รายการ...');
   try {
     const payload = itemsToSave.map(({ created_at, ...rest }) => rest);
-    await sb.from('usage').insert(payload);
-    itemsToSave.forEach(it => U.unshift(it));
+    const { data, error } = await sb.from('usage').insert(payload).select();
+    if (error) throw error;
+    // ใช้แถวจริงที่ฐานข้อมูลส่งกลับมาเท่านั้น (ไม่สร้างข้อมูลจำลองฝั่งหน้าเว็บ)
+    (data || []).reverse().forEach(it => U.unshift(it));
     toast(`บันทึกการเบิกวัสดุ ${itemsToSave.length} รายการสำเร็จ!`);
     openMat(id);
     if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();
   } catch (err) {
-    itemsToSave.forEach(it => U.unshift(it));
-    toast(`บันทึกการเบิกวัสดุสำเร็จ!`);
-    openMat(id);
-    if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();
+    console.error('saveMat error:', err);
+    const msg = String(err?.message || err || '');
+    toast(/budget/i.test(msg)
+      ? 'บันทึกไม่สำเร็จ: ฐานข้อมูลยังไม่มีคอลัมน์ budget (ให้แอดมินรัน add_usage_budget.sql ใน Supabase)'
+      : 'บันทึกการเบิกวัสดุไม่สำเร็จ: ' + msg);
   }
 };
 
@@ -951,7 +962,6 @@ window.selectActStep = function(stepKey) {
     const stepNames = {
       accepted: 'รับเรื่องแล้ว',
       doing: 'กำลังดำเนินการ',
-      checking: 'ตรวจสอบงาน',
       done: 'เสร็จสิ้น'
     };
     submitBtnText.textContent = `อัปเดตเป็น: ${stepNames[stepKey] || stepKey}`;
@@ -962,7 +972,7 @@ window.openAct = function (id) {
   const t = T.find(x => x.id === id) || (typeof found !== 'undefined' && found?.id === id ? found : { id });
   
   // กำหนดสเต็ปปัจจุบันของงาน (สิ้นสุดที่ซ่อมเสร็จสิ้น)
-  const validSteps = ['accepted', 'doing', 'checking', 'done'];
+  const validSteps = ['accepted', 'doing', 'done'];
   const curStatus = validSteps.includes(t.status) ? t.status : (t.status === 'closed' ? 'done' : 'doing');
   
   // กำหนดสเต็ปเป้าหมายเริ่มต้น: ให้เลื่อนไปข้างหน้า 1 ขั้นโดยอัตโนมัติเพื่อให้ช่างกดอัปเดตได้ง่าย
@@ -989,8 +999,7 @@ window.openAct = function (id) {
   const stepsDef = [
     { key: 'accepted', num: 1, icon: '📋', name: 'รับเรื่องแล้ว', defSub: 'รับเรื่องเรียบร้อย' },
     { key: 'doing', num: 2, icon: '🔧', name: 'กำลังดำเนินการ', defSub: 'เจ้าหน้าที่เข้าตรวจ/ซ่อม' },
-    { key: 'checking', num: 3, icon: '✔️', name: 'ตรวจสอบงาน', defSub: 'รอการตรวจสอบ' },
-    { key: 'done', num: 4, icon: '👍', name: 'เสร็จสิ้น', defSub: 'ยังไม่เสร็จ' }
+    { key: 'done', num: 3, icon: '👍', name: 'เสร็จสิ้น', defSub: 'ยังไม่เสร็จ' }
   ];
 
   $('#dlg').className = 'act-dialog-wide';
