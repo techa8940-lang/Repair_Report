@@ -365,7 +365,7 @@ function vReport() {
 
               <div class="form-group">
                 <label>เบอร์โทรศัพท์ <span class="req">*</span></label>
-                <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:8px;">
+                <div class="tel-grid" style="display:grid; grid-template-columns:1.5fr 1fr; gap:8px;">
                   <input class="form-control" name="tel" value="${esc(newReportDraft.tel || (me?.tel || ''))}" placeholder="เบอร์มือถือ เช่น 081-234-5678" required oninput="updateDraft('tel', this.value)">
                   <input class="form-control" name="tel_internal" value="${esc(newReportDraft.tel_internal || '')}" placeholder="เบอร์ภายใน" oninput="updateDraft('tel_internal', this.value)">
                 </div>
@@ -845,7 +845,7 @@ function vHistory() {
       </div>
 
       <div class="nusp-table-wrapper">
-        <table class="nusp-table">
+        <table class="nusp-table table-cards">
           <thead>
             <tr>
               <th>เลขที่ใบแจ้งซ่อม</th>
@@ -879,20 +879,20 @@ function vHistory() {
 
               return `
                 <tr>
-                  <td style="font-weight:700; color:var(--primary); font-size:15px; white-space:nowrap;">${esc(t.no)}</td>
-                  <td>
+                  <td data-label="เลขที่ใบแจ้งซ่อม" style="font-weight:700; color:var(--primary); font-size:15px; white-space:nowrap;">${esc(t.no)}</td>
+                  <td data-label="หัวข้อ"><div style="text-align:right;">
                     <div style="font-weight:700; color:#0b2545; font-size:15px;">${esc(equipType)}</div>
                     <div style="font-size:12.5px; color:#64748b;">หมวด: ${esc(t.type || t.cat || 'ทั่วไป')}</div>
-                  </td>
-                  <td>
+                  </div></td>
+                  <td data-label="เลขครุภัณฑ์">
                     ${assetNo ? `
                       <span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fed7aa; font-family:monospace; font-size:13.5px; font-weight:700; padding:4px 8px;">🏷️ ${esc(assetNo)}</span>
                     ` : `
                       <span style="color:#94a3b8; font-size:13px;">- ไม่ได้ระบุ -</span>
                     `}
                   </td>
-                  <td>${badge}</td>
-                  <td style="color:var(--text-muted); font-size:14.5px; white-space:nowrap;">${esc(t.date || fmt(t.created_at) || '-')}</td>
+                  <td data-label="สถานะ">${badge}</td>
+                  <td data-label="วันที่แจ้ง" style="color:var(--text-muted); font-size:14.5px; white-space:nowrap;">${esc(t.date || fmt(t.created_at) || '-')}</td>
                   <td>
                     <button class="btn btn-outline btn-sm" onclick="quickTrack('${t.no}', '${t.email || ''}')" style="font-weight:700;">ดูรายละเอียด</button>
                   </td>
@@ -999,7 +999,7 @@ function vProfile() {
               <small class="mut" style="font-size:12.5px; margin-top:3px; display:block;">* อีเมลใช้เป็นบัญชีเข้าสู่ระบบ ไม่สามารถแก้ไขได้</small>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="stack-sm" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
               <div>
                 <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">เบอร์โทรศัพท์มือถือ</label>
                 <input class="form-control" id="prof_tel" value="${esc(me?.tel || '')}" placeholder="เช่น 081-234-5678" style="font-size:16px; padding:10px 14px;">

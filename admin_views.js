@@ -538,7 +538,7 @@ window.openAddStaffModal = function() {
         <!-- 1. เลือกบทบาท (ช่าง หรือ แอดมิน) -->
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:6px; font-size:14.5px;">เลือกประเภทบัญชี:</label>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="stack-sm" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
             <label style="display:flex; align-items:center; gap:8px; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:10px; cursor:pointer; font-weight:700; background:#f0f9ff;" id="label_role_tech">
               <input type="radio" name="role" value="tech" checked onchange="toggleStaffFormFields('tech')">
               <span>👨‍🔧 ช่างซ่อมบำรุง</span>
@@ -751,7 +751,7 @@ window.openEditStaffModal = function(id) {
         <!-- 1. เลือกบทบาทผู้ใช้ -->
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:6px; font-size:14.5px;">บทบาทในระบบ:</label>
-          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+          <div class="role-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
             <label style="display:flex; align-items:center; gap:6px; padding:10px 8px; border:1.5px solid #cbd5e1; border-radius:10px; cursor:pointer; font-weight:700; font-size:13px; background:#f8fafc;">
               <input type="radio" name="role" value="reporter" ${isReporter ? 'checked' : ''} onchange="toggleEditStaffRole('reporter')">
               <span>👤 ผู้แจ้งซ่อม</span>
@@ -780,7 +780,7 @@ window.openEditStaffModal = function(id) {
         </div>
 
         <!-- 4. เบอร์โทรศัพท์ & หน่วยงาน -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+        <div class="stack-sm" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
           <div class="form-group">
             <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">เบอร์โทรศัพท์</label>
             <input class="form-control" type="tel" name="tel" value="${esc(u.tel || '')}" placeholder="เช่น 081-234-5678" style="height:44px; font-size:15px;">
@@ -1100,28 +1100,42 @@ function vAll() {
         </span>
       </div>
 
-      <!-- Filter Bar: period-bar -->
-      <div class="period-bar">
-        <div class="period-bar-head">
-          <span class="period-bar-title">📅 ช่วงเวลา</span>
-          <span class="period-bar-count">${isPeriodFiltered ? `พบ ${periodFiltered.length} จาก ${allTickets.length} รายการ` : `ทั้งหมด ${allTickets.length} รายการ`}</span>
-          ${isPeriodFiltered ? `<button type="button" class="period-bar-reset" onclick="resetAdminAllPeriod()">✕ ล้างตัวกรอง</button>` : ''}
+      <!-- Filter Bar: ปุ่มเลือกปี + เลือกเดือน + รีเซ็ต -->
+      <div class="done-filter-bar" style="background:#f8fafc; border:1.5px solid #cbd5e1; padding:12px 14px; border-radius:14px; margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <button type="button" class="btn ${!isPeriodFiltered ? 'btn-primary' : 'btn-outline'}" style="font-size:13.5px; font-weight:700; height:38px; border-radius:8px; padding:0 14px;" onclick="resetAdminAllPeriod()">
+            ทุกช่วงเวลา (${allTickets.length})
+          </button>
+          ${isPeriodFiltered ? `
+            <button type="button" class="btn btn-outline btn-sm" onclick="resetAdminAllPeriod()" style="color:var(--danger); border-color:#cbd5e1; height:38px; font-size:13px; font-weight:700;" title="ล้างตัวกรอง">
+              ✕ รีเซ็ตตัวกรอง
+            </button>
+          ` : ''}
         </div>
-        <div class="period-bar-grid">
-          <label class="period-field">
-            <span class="period-field-label">ปี</span>
-            <select class="period-select" onchange="setAdminAllYear(this.value)">
-              <option value="all" ${adminAllYear === 'all' ? 'selected' : ''}>ทุกปี</option>
-              ${sortedYears.map(y => `<option value="${y}" ${String(adminAllYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543}</option>`).join('')}
+
+        <!-- แถวปีและเดือน อยู่บรรทัดเดียวกันเสมอทั้งจอมือถือแนวตั้งและคอมพิวเตอร์ -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; width:100%;">
+          <!-- 1. เลือกปี -->
+          <div style="display:flex; align-items:center; gap:6px; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:4px 8px;">
+            <label style="font-size:13px; font-weight:700; color:#0b2545; white-space:nowrap; margin:0;">📅 ปี:</label>
+            <select class="form-control" style="width:100%; height:34px; font-size:13px; font-weight:700; border:none; padding:2px 4px; background:transparent; cursor:pointer;" onchange="setAdminAllYear(this.value)">
+              <option value="all" ${adminAllYear === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
+              ${sortedYears.map(y => `
+                <option value="${y}" ${String(adminAllYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>
+              `).join('')}
             </select>
-          </label>
-          <label class="period-field">
-            <span class="period-field-label">เดือน</span>
-            <select class="period-select" onchange="setAdminAllMonth(this.value)">
-              <option value="all" ${adminAllMonth === 'all' ? 'selected' : ''}>ทุกเดือน</option>
-              ${thaiMonths.map(m => `<option value="${m.num}" ${adminAllMonth === m.num ? 'selected' : ''}>${m.name}</option>`).join('')}
+          </div>
+
+          <!-- 2. เลือกเดือน -->
+          <div style="display:flex; align-items:center; gap:6px; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:4px 8px;">
+            <label style="font-size:13px; font-weight:700; color:#0b2545; white-space:nowrap; margin:0;">🗓️ เดือน:</label>
+            <select class="form-control" style="width:100%; height:34px; font-size:13px; font-weight:700; border:none; padding:2px 4px; background:transparent; cursor:pointer;" onchange="setAdminAllMonth(this.value)">
+              <option value="all" ${adminAllMonth === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
+              ${thaiMonths.map(m => `
+                <option value="${m.num}" ${adminAllMonth === m.num ? 'selected' : ''}>${m.name}</option>
+              `).join('')}
             </select>
-          </label>
+          </div>
         </div>
       </div>
 
@@ -1357,18 +1371,18 @@ window.openAdminTicketModal = function(id) {
             <div style="margin-top:16px;">
               <b style="display:block; margin-bottom:8px; color:#0b2545; font-size:14px;">📦 รายการวัสดุอุปกรณ์ที่เบิกใช้ (${usedMats.length} รายการ):</b>
               <div class="nusp-table-wrapper">
-                <table class="nusp-table" style="font-size:13.5px;">
+                <table class="nusp-table table-cards" style="font-size:13.5px;">
                   <thead>
                     <tr><th>ชื่อวัสดุ</th><th>จำนวน</th><th>หน่วย</th><th style="text-align:right;">งบที่ใช้ (บาท)</th><th>ผู้เบิก</th></tr>
                   </thead>
                   <tbody>
                     ${usedMats.map(u => `
                       <tr>
-                        <td style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
-                        <td style="font-weight:800; color:#0284c7;">${u.qty}</td>
-                        <td>${esc(u.unit || 'ชิ้น')}</td>
-                        <td style="text-align:right; font-weight:700; color:#15803d;">${window.budgetOf(u) === null ? '-' : window.budgetOf(u).toLocaleString()}</td>
-                        <td>${esc(u.tech_name || '-')}</td>
+                        <td data-label="ชื่อวัสดุ" style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
+                        <td data-label="จำนวน" style="font-weight:800; color:#0284c7;">${u.qty}</td>
+                        <td data-label="หน่วย">${esc(u.unit || 'ชิ้น')}</td>
+                        <td data-label="งบที่ใช้ (บาท)" style="text-align:right; font-weight:700; color:#15803d;">${window.budgetOf(u) === null ? '-' : window.budgetOf(u).toLocaleString()}</td>
+                        <td data-label="ผู้เบิก">${esc(u.tech_name || '-')}</td>
                       </tr>
                     `).join('')}
                   </tbody>
@@ -1745,7 +1759,7 @@ function vStock() {
       </div>
 
       <!-- ส่วนที่ 2: Middle Section (2 Charts ตามรูปภาพต้นแบบ) -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:18px; margin-bottom:22px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap:18px; margin-bottom:22px;">
         <!-- Chart 1: ยอดเบิกใช้ตามหมวดหมู่ (Bar Chart) -->
         <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:22px; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -1861,7 +1875,7 @@ function vStock() {
         ` : ''}
 
         <div class="nusp-table-wrapper">
-          <table class="nusp-table">
+          <table class="nusp-table table-cards">
             <thead>
               <tr>
                 <th style="min-width:130px;">วันที่</th>
@@ -1880,25 +1894,25 @@ function vStock() {
 
                 return `
                   <tr>
-                    <td style="color:#64748b; font-size:14px; white-space:nowrap;">
+                    <td data-label="วันที่" style="color:#64748b; font-size:14px; white-space:nowrap;">
                       🕒 ${esc(dateStr)}
                     </td>
-                    <td style="font-weight:700; color:#0b2545; white-space:nowrap;">
+                    <td data-label="ช่าง" style="font-weight:700; color:#0b2545; white-space:nowrap;">
                       👨‍🔧 ${esc(u.tech_name || 'ช่างซ่อมบำรุง')}
                     </td>
-                    <td style="font-weight:800; font-family:monospace; color:#ea580c; white-space:nowrap;">
+                    <td data-label="เลขซ่อม" style="font-weight:800; font-family:monospace; color:#ea580c; white-space:nowrap;">
                       ${esc(u.ticket_id || '-')}
                     </td>
-                    <td style="font-weight:700; color:#0f172a;">
+                    <td data-label="วัสดุ" style="font-weight:700; color:#0f172a;"><div style="text-align:right;">
                       ${esc(u.name)}
                       <span style="font-size:11.5px; margin-left:6px; color:${info.color}; background:${info.color}15; padding:1px 6px; border-radius:4px; font-weight:600;">
                         ${esc(info.cat)}
                       </span>
-                    </td>
-                    <td style="font-weight:800; color:#0284c7; white-space:nowrap; text-align:center;">
+                    </div></td>
+                    <td data-label="จำนวน" style="font-weight:800; color:#0284c7; white-space:nowrap; text-align:center;">
                       ${qty} ${esc(u.unit || '-')}
                     </td>
-                    <td style="font-weight:800; color:#15803d; white-space:nowrap; text-align:right;">
+                    <td data-label="งบประมาณ" style="font-weight:800; color:#15803d; white-space:nowrap; text-align:right;">
                       ${fmtBudget(u)}
                     </td>
                   </tr>
@@ -2222,7 +2236,7 @@ function vAssetCheck() {
               <span>📦</span> รายการวัสดุอุปกรณ์ที่เคยเบิกใช้ในการซ่อมครุภัณฑ์นี้ (${assetSummary.materials.length} รายการ)
             </h4>
             <div class="nusp-table-wrapper">
-              <table class="nusp-table">
+              <table class="nusp-table table-cards">
                 <thead>
                   <tr>
                     <th>วันที่เบิก</th>
@@ -2235,11 +2249,11 @@ function vAssetCheck() {
                 <tbody>
                   ${assetSummary.materials.length ? assetSummary.materials.map(u => `
                     <tr>
-                      <td style="color:var(--text-muted); font-size:14px; white-space:nowrap;">${fmt(u.created_at)}</td>
-                      <td style="font-weight:700; color:var(--primary); white-space:nowrap;">${esc(u.ticket_id)}</td>
-                      <td style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
-                      <td style="font-weight:800; color:#0284c7; white-space:nowrap;">${u.qty} ${esc(u.unit || 'ชิ้น')}</td>
-                      <td style="font-weight:600; white-space:nowrap;">${esc(u.tech_name || '-')}</td>
+                      <td data-label="วันที่เบิก" style="color:var(--text-muted); font-size:14px; white-space:nowrap;">${fmt(u.created_at)}</td>
+                      <td data-label="ใบงานที่เบิก" style="font-weight:700; color:var(--primary); white-space:nowrap;">${esc(u.ticket_id)}</td>
+                      <td data-label="ชื่อวัสดุ" style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
+                      <td data-label="จำนวน" style="font-weight:800; color:#0284c7; white-space:nowrap;">${u.qty} ${esc(u.unit || 'ชิ้น')}</td>
+                      <td data-label="ช่างผู้เบิก" style="font-weight:600; white-space:nowrap;">${esc(u.tech_name || '-')}</td>
                     </tr>
                   `).join('') : `
                     <tr>
@@ -2344,7 +2358,7 @@ function vAssetCheck() {
           📋 ทะเบียนครุภัณฑ์ที่มีประวัติการซ่อมในระบบ (${knownAssets.length} รายการ)
         </div>
         <div class="nusp-table-wrapper">
-          <table class="nusp-table">
+          <table class="nusp-table table-cards">
             <thead>
               <tr>
                 <th>หมายเลขครุภัณฑ์</th>
@@ -2357,16 +2371,16 @@ function vAssetCheck() {
             <tbody>
               ${knownAssets.length ? knownAssets.map(a => `
                 <tr>
-                  <td style="font-weight:800; color:var(--primary); font-family:monospace; font-size:15px; white-space:nowrap;">
+                  <td data-label="หมายเลขครุภัณฑ์" style="font-weight:800; color:var(--primary); font-family:monospace; font-size:15px; white-space:nowrap;">
                     🏷️ ${esc(a.code)}
                   </td>
-                  <td style="font-weight:700; color:#0f172a; font-size:15px;">
+                  <td data-label="ชื่อ / ชนิด" style="font-weight:700; color:#0f172a; font-size:15px;">
                     ${esc(a.name)}
                   </td>
-                  <td style="color:#475569; font-size:14px;">
+                  <td data-label="สถานที่ตั้ง" style="color:#475569; font-size:14px;">
                     ${esc(a.location)}
                   </td>
-                  <td>
+                  <td data-label="ซ่อมแล้ว">
                     <span class="badge badge-done" style="font-size:13.5px; font-weight:700;">
                       ${a.count} ครั้ง
                     </span>

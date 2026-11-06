@@ -1311,7 +1311,7 @@ function vLogin() {
 
             <div class="form-group" style="margin-bottom:16px;">
               <label style="font-size:17px; font-weight:700; color:var(--text-main);">เบอร์โทรศัพท์ <span class="req">*</span></label>
-              <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:8px;">
+              <div class="tel-grid" style="display:grid; grid-template-columns:1.5fr 1fr; gap:8px;">
                 <input class="form-control" name="tel" required placeholder="เบอร์มือถือ เช่น 081-234-5678" style="font-size:17px; min-height:50px;">
                 <input class="form-control" name="tel_internal" placeholder="เบอร์ภายใน (ถ้ามี)" style="font-size:17px; min-height:50px;">
               </div>
