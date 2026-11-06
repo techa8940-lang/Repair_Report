@@ -322,20 +322,20 @@ function vReport() {
       </div>
 
       <!-- Stepper Wizard (3 Steps) -->
-      <div class="step-wizard">
-        <div class="step-item ${reportStep >= 1 ? 'active' : ''} ${reportStep > 1 ? 'completed' : ''}">
-          <div class="step-circle">${reportStep > 1 ? '✓' : '1'}</div>
-          <span>ข้อมูลปัญหา</span>
+      <div class="rw-stepper">
+        <div class="rw-step ${reportStep >= 1 ? 'active' : ''} ${reportStep > 1 ? 'completed' : ''}">
+          <div class="rw-circle">${reportStep > 1 ? '✓' : '1'}</div>
+          <div class="rw-label"><span class="rw-full">ข้อมูลปัญหา</span><span class="rw-short">ข้อมูล</span></div>
         </div>
-        <div class="step-line ${reportStep > 1 ? 'completed' : ''}"></div>
-        <div class="step-item ${reportStep >= 2 ? 'active' : ''} ${reportStep > 2 ? 'completed' : ''}">
-          <div class="step-circle">${reportStep > 2 ? '✓' : '2'}</div>
-          <span>ตรวจสอบข้อมูล</span>
+        <div class="rw-line ${reportStep > 1 ? 'completed' : ''}"></div>
+        <div class="rw-step ${reportStep >= 2 ? 'active' : ''} ${reportStep > 2 ? 'completed' : ''}">
+          <div class="rw-circle">${reportStep > 2 ? '✓' : '2'}</div>
+          <div class="rw-label"><span class="rw-full">ตรวจสอบข้อมูล</span><span class="rw-short">ตรวจสอบ</span></div>
         </div>
-        <div class="step-line ${reportStep > 2 ? 'completed' : ''}"></div>
-        <div class="step-item ${reportStep === 3 ? 'active' : ''}">
-          <div class="step-circle">3</div>
-          <span>ยืนยันการแจ้งซ่อม</span>
+        <div class="rw-line ${reportStep > 2 ? 'completed' : ''}"></div>
+        <div class="rw-step ${reportStep === 3 ? 'active' : ''}">
+          <div class="rw-circle">3</div>
+          <div class="rw-label"><span class="rw-full">ยืนยันการแจ้งซ่อม</span><span class="rw-short">ยืนยัน</span></div>
         </div>
       </div>
 
@@ -814,44 +814,33 @@ function vHistory() {
         </div>
       </div>
 
-      <!-- แถบเลือกดูตามช่วงเวลา (ปี / เดือน / ทุกช่วงเวลา) -->
-      <div class="history-period-bar" style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:12px; padding:12px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <span style="font-weight:700; color:#0b2545; font-size:14.5px; display:flex; align-items:center; gap:6px;">
-            <span>🗓️</span> ช่วงเวลา:
+      <!-- แถบเลือกดูตามช่วงเวลา: ปี / เดือน สองคอลัมน์กว้างเท่ากัน -->
+      <div class="period-bar">
+        <div class="period-bar-head">
+          <span class="period-bar-title"><span>🗓️</span> ช่วงเวลา
+            <span class="period-bar-count">${isPeriodFiltered ? `พบ ${filtered.length} จาก ${validList.length} รายการ` : `ทั้งหมด ${validList.length} รายการ`}</span>
           </span>
-          <button type="button" class="btn btn-sm ${!isPeriodFiltered ? 'btn-primary' : 'btn-outline'}" onclick="resetReporterHistoryPeriod()" style="font-size:13.5px; font-weight:700; border-radius:8px;">
-            ทุกช่วงเวลา (${validList.length})
-          </button>
-          ${isPeriodFiltered ? `
-            <span class="badge badge-doing" style="font-size:13px; padding:4px 10px;">
-              กรองได้ ${filtered.length} รายการ
-            </span>
-          ` : ''}
+          ${isPeriodFiltered ? `<button type="button" class="period-bar-reset" onclick="resetReporterHistoryPeriod()">✕ ล้างตัวกรอง</button>` : ''}
         </div>
-
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <!-- 1. เลือกปี -->
-          <div style="display:flex; align-items:center; gap:6px;">
-            <label style="font-size:13.5px; font-weight:700; color:#475569;">ปี:</label>
-            <select class="form-control" style="width:auto; height:38px; font-size:14px; font-weight:700; padding:4px 10px;" onchange="setReporterHistoryYear(this.value)">
-              <option value="all" ${reporterHistoryYear === 'all' ? 'selected' : ''}>-- ทุกปี --</option>
+        <div class="period-bar-grid">
+          <label class="period-field">
+            <span class="period-field-label">ปี</span>
+            <select class="period-select" onchange="setReporterHistoryYear(this.value)">
+              <option value="all" ${reporterHistoryYear === 'all' ? 'selected' : ''}>ทุกปี</option>
               ${sortedYears.map(y => `
-                <option value="${y}" ${String(reporterHistoryYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543} (${y})</option>
+                <option value="${y}" ${String(reporterHistoryYear) === String(y) ? 'selected' : ''}>พ.ศ. ${y + 543}</option>
               `).join('')}
             </select>
-          </div>
-
-          <!-- 2. เลือกเดือน -->
-          <div style="display:flex; align-items:center; gap:6px;">
-            <label style="font-size:13.5px; font-weight:700; color:#475569;">เดือน:</label>
-            <select class="form-control" style="width:auto; height:38px; font-size:14px; font-weight:700; padding:4px 10px;" onchange="setReporterHistoryMonth(this.value)">
-              <option value="all" ${reporterHistoryMonth === 'all' ? 'selected' : ''}>-- ทุกเดือน --</option>
+          </label>
+          <label class="period-field">
+            <span class="period-field-label">เดือน</span>
+            <select class="period-select" onchange="setReporterHistoryMonth(this.value)">
+              <option value="all" ${reporterHistoryMonth === 'all' ? 'selected' : ''}>ทุกเดือน</option>
               ${thaiMonths.map(m => `
                 <option value="${m.num}" ${reporterHistoryMonth === m.num ? 'selected' : ''}>${m.name}</option>
               `).join('')}
             </select>
-          </div>
+          </label>
         </div>
       </div>
 
