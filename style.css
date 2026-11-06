@@ -3001,3 +3001,55 @@ dialog#dlg.admin-ticket-dialog-wide {
   flex-shrink: 0;
   margin-top: -18px;
 }
+
+/* ==========================================================================
+   Mobile fix: แถบลำดับขั้นตอน (steps-wizard) ต้องพอดีจอโทรศัพท์แนวตั้ง
+   ไม่ให้ป๊อปอัพ/การ์ดเลื่อนซ้ายขวา
+   ========================================================================== */
+@media (max-width: 768px) {
+  .card-timeline-container {
+    overflow-x: hidden;
+  }
+  .steps-wizard {
+    min-width: 0 !important;
+    width: 100%;
+    gap: 2px !important;
+    padding: 10px 6px !important;
+    overflow: visible !important;
+    justify-content: space-between !important;
+  }
+  .steps-wizard .step-item {
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+    flex-shrink: 1 !important;
+  }
+  .steps-wizard .step-circle {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 13px !important;
+  }
+  .steps-wizard .step-label {
+    font-size: 12px !important;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .steps-wizard .step-label small {
+    font-size: 10.5px !important;
+  }
+  .steps-wizard .step-connector-arrow {
+    font-size: 13px;
+    margin-top: -22px;
+  }
+
+  /* ป๊อปอัพรายละเอียด: ห้ามเลื่อนแนวนอน และตัดคำยาวๆ (เช่น เบอร์/อีเมล) */
+  dialog#dlg.act-dialog-wide,
+  dialog#dlg.admin-ticket-dialog-wide {
+    overflow-x: hidden !important;
+  }
+  dialog#dlg .modal-body-wrap {
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    padding: 14px 14px !important;
+  }
+}

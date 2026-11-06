@@ -1214,7 +1214,7 @@ window.openReporterTicketModal = function(t) {
         <button type="button" onclick="document.getElementById('dlg').close()" style="background:rgba(255,255,255,0.2); border:none; color:#ffffff; width:34px; height:34px; border-radius:9999px; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="ปิดหน้าต่าง">&times;</button>
       </div>
 
-      <div style="padding:20px 24px; max-height:80vh; overflow-y:auto;">
+      <div class="modal-body-wrap" style="padding:20px 24px; max-height:80vh; overflow-y:auto; overflow-x:hidden;">
         <!-- Stepper แนวนอนด้านบน (คงไว้ในทุกการ์ด) -->
         <div style="margin-bottom:16px; border-bottom:1.5px dashed #fed7aa; padding-bottom:12px;">
           ${(typeof steps === 'function') ? steps(t) : ''}
