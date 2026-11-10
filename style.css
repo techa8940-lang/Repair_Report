@@ -3338,3 +3338,9 @@ dialog#dlg.admin-ticket-dialog-wide {
   }
   .mine-stepper-arrow { font-size: 12px; }
 }
+/* มือถือ: ซ่อนปุ่มสลับมุมมองที่ topbar ด้านขวา (ใช้ตัวสลับในเมนูด้านซ้ายแทน) */
+@media (max-width: 768px) {
+  .app-topbar .admin-view-switcher {
+    display: none !important;
+  }
+}
