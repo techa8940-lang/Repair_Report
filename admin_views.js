@@ -36,6 +36,97 @@ window.resetAdminAllPeriod = function() {
   render();
 };
 
+window.exportAdminTickets = function() {
+  const list = (typeof T !== 'undefined') ? T : [];
+  if (!list.length) return toast('ไม่มีข้อมูลใบแจ้งซ่อมสำหรับส่งออก');
+  
+  const headers = [
+    'เลขที่งาน',
+    'วันที่แจ้ง',
+    'หัวข้อ/ชนิดอุปกรณ์',
+    'หมวดหมู่',
+    'อาคาร',
+    'ชั้น',
+    'ห้อง/บริเวณ',
+    'หมายเลขครุภัณฑ์',
+    'ผู้แจ้งซ่อม',
+    'หน่วยงาน',
+    'เบอร์โทรผู้แจ้ง',
+    'อีเมลผู้แจ้ง',
+    'ช่างผู้รับผิดชอบ',
+    'สถานะ',
+    'งบประมาณ (บาท)',
+    'รายละเอียดปัญหา'
+  ];
+
+  const rows = list.map(t => {
+    const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : { name: t.name, org: t.org, tel: t.tel, email: t.email };
+    const stLabel = (typeof ST !== 'undefined' && ST[t.status]) ? ST[t.status][0] : t.status;
+    const bg = (typeof ticketBudget === 'function') ? (ticketBudget(t.id) || 0) : 0;
+    return [
+      t.id || t.no || '',
+      t.created_at ? fmt(t.created_at) : (t.date || ''),
+      (typeof getTicketTitle === 'function') ? getTicketTitle(t) : (t.title || ''),
+      t.cat || t.sub_type || 'ทั่วไป',
+      t.bld || '-',
+      t.flr || '-',
+      t.room || '-',
+      t.items?.[0]?.asset || t.asset_no || t.asset || '-',
+      rep.name,
+      rep.org,
+      rep.tel,
+      rep.email,
+      t.tech_name || 'ยังไม่มอบหมาย',
+      stLabel,
+      bg,
+      (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || '-')
+    ];
+  });
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  exportToCSV(`repair_tickets_${dateStr}.csv`, headers, rows);
+};
+
+window.exportMaterialsReport = function() {
+  const usageList = (typeof U !== 'undefined') ? U : [];
+  if (!usageList.length) return toast('ไม่มีข้อมูลการเบิกวัสดุสำหรับส่งออก');
+
+  const headers = [
+    'วันที่เบิก',
+    'เลขที่ใบซ่อม',
+    'ชื่อวัสดุ/อุปกรณ์',
+    'หมวดหมู่วัสดุ',
+    'จำนวนที่เบิก',
+    'หน่วยนับ',
+    'ราคาต่อหน่วย (บาท)',
+    'ยอดรวม (บาท)',
+    'ผู้เบิก (ช่าง)'
+  ];
+
+  const rows = usageList.map(m => {
+    const info = (typeof getMatInfo === 'function') ? getMatInfo(m.name) : { cat: 'ทั่วไป', price: 0, unit: 'ชิ้น' };
+    const price = Number(m.price || info.price || 0);
+    const qty = Number(m.qty || 1);
+    const total = m.budget !== null && m.budget !== undefined && m.budget !== '' ? Number(m.budget) : (price * qty);
+    return [
+      m.created_at ? fmt(m.created_at) : (m.date || '-'),
+      m.ticket_id || '-',
+      m.name || '-',
+      m.cat || info.cat || 'วัสดุทั่วไป',
+      qty,
+      m.unit || info.unit || 'ชิ้น',
+      price,
+      total,
+      m.tech_name || '-'
+    ];
+  });
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  exportToCSV(`material_usage_${dateStr}.csv`, headers, rows);
+};
+
 function getAdminTicketDateObj(t) {
   if (t.created_at) {
     const d = new Date(t.created_at);
@@ -377,6 +468,7 @@ function vTechsManage() {
             </thead>
             <tbody>
               ${filtered.length ? filtered.map(t => {
+                const info = (typeof getUserDisplayInfo === 'function') ? getUserDisplayInfo(t) : { email: t.email, tel: t.tel, org: t.org, workDisplay: '' };
                 const isAdmin = t.role === 'admin';
                 const isReporter = t.role === 'reporter' || (!t.role && t.role !== 'tech' && t.role !== 'admin');
                 const isTech = t.role === 'tech';
@@ -392,15 +484,16 @@ function vTechsManage() {
                       </span>
                     </td>
                     <td style="font-size:14px; font-family:monospace; color:#475569;">
-                      ${esc(t.email || '-')}
+                      <div>${esc(info.email)}</div>
+                      <div style="font-size:13px; color:#0284c7; font-weight:700; margin-top:3px;"><a href="tel:${esc(info.tel.replace(/[^0-9+]/g, ''))}" style="color:#0284c7; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(info.tel)}</a></div>
                     </td>
                     <td style="font-size:14px; color:#334155;">
                       <div><b>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
-                      ${t.org ? `<div style="color:#64748b; font-size:13px;">หน่วยงาน: ${esc(t.org)}</div>` : ''}
+                      <div style="color:#64748b; font-size:13px;">หน่วยงาน: ${esc(info.org)}</div>
                       ${isTech && t.skill ? `<div style="color:#64748b; font-size:13px;">เชี่ยวชาญ: ${esc(t.skill)}</div>` : ''}
                     </td>
                     <td style="font-weight:700; font-size:14.5px; white-space:nowrap;">
-                      ${isTech ? `<span style="color:#0284c7;">${t.jobs || 0} งาน</span>` : '<span style="color:#94a3b8;">-</span>'}
+                      ${info.workDisplay}
                     </td>
                     <td style="white-space:nowrap; text-align:center;">
                       <div style="display:inline-flex; gap:6px;">
@@ -430,16 +523,10 @@ function vTechsManage() {
         <!-- Mobile View Cards -->
         <div class="mobile-only-cards" style="display:none; flex-direction:column; gap:12px; margin-top:14px; padding-bottom:40px;">
           ${filtered.length ? filtered.map(t => {
+            const info = (typeof getUserDisplayInfo === 'function') ? getUserDisplayInfo(t) : { email: t.email, tel: t.tel, org: t.org };
             const isAdmin = t.role === 'admin';
             const isReporter = t.role === 'reporter' || (!t.role && t.role !== 'tech' && t.role !== 'admin');
             const isTech = t.role === 'tech';
-            let staffEmail = t.email || '';
-            if (!staffEmail || staffEmail === '-') {
-              try {
-                const emCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
-                staffEmail = emCache[t.id] || emCache[t.name] || '-';
-              } catch(e) { staffEmail = '-'; }
-            }
 
             return `
               <div style="background:#ffffff; border:1.5px solid #e2e8f0; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:8px; box-shadow:0 1px 4px rgba(0,0,0,0.03);">
@@ -450,11 +537,11 @@ function vTechsManage() {
                   </span>
                 </div>
 
-                <div style="display:flex; flex-direction:column; gap:3px; font-size:13.5px; color:#475569;">
-                  <div>📧 <b>อีเมล:</b> <span style="font-family:monospace; color:#0f172a;">${esc(staffEmail)}</span></div>
-                  <div>📞 <b>เบอร์โทร:</b> <span style="color:#0284c7; font-weight:700;">${esc(t.tel || '-')}</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px; font-size:13.5px; color:#475569;">
+                  <div>📧 <b>อีเมล:</b> <span style="font-family:monospace; color:#0f172a;">${esc(info.email)}</span></div>
+                  <div>📞 <b>เบอร์โทร:</b> <a href="tel:${esc(info.tel.replace(/[^0-9+]/g, ''))}" style="color:#0284c7; font-weight:700; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(info.tel)}</a></div>
                   <div>💼 <b>ตำแหน่ง:</b> <span>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</span></div>
-                  <div>🏢 <b>หน่วยงาน:</b> <span>${esc(t.org || '-')}</span></div>
+                  <div>🏢 <b>หน่วยงาน:</b> <span>${esc(info.org)}</span></div>
                   ${isTech && t.skill ? `<div>🛠️ <b>เชี่ยวชาญ:</b> <span>${esc(t.skill)}</span></div>` : ''}
                 </div>
 
@@ -845,13 +932,21 @@ window.saveEditStaff = async function(e, id) {
     org,
     skill: role === 'tech' ? (skill || 'ทั่วไป') : null
   };
+  const dbPayload = { name, role, tel, org };
 
   try {
-    const res = await sb.from('profiles').update(updatePayload).eq('id', id);
+    const res = await sb.from('profiles').update(dbPayload).eq('id', id);
     if (res?.error) console.warn('profiles update warning:', res.error);
   } catch (err) {
     console.warn('profiles update error:', err);
   }
+
+  // บันทึกลง localStorage nusp_edited_staff เพื่อให้คงอยู่เมื่อรีเฟรชหน้าจอ
+  try {
+    const editedMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
+    editedMap[id] = { name, role, tel, org, role_desc, skill: (role === 'tech' ? skill : null), email };
+    localStorage.setItem('nusp_edited_staff', JSON.stringify(editedMap));
+  } catch (e) {}
 
   // อัปเดตตารางแคชอีเมล
   if (email) {
@@ -934,6 +1029,9 @@ window.executeDeleteStaff = async function(id) {
       deletedList.push(id);
       localStorage.setItem('nusp_deleted_staff', JSON.stringify(deletedList));
     }
+    const editedMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
+    delete editedMap[id];
+    localStorage.setItem('nusp_edited_staff', JSON.stringify(editedMap));
   } catch(e) {}
 
   if (typeof allStaff !== 'undefined') {
@@ -1095,9 +1193,14 @@ function vAll() {
         <h2 style="font-size:22px; font-weight:800; display:flex; align-items:center; gap:8px; margin:0;">
           <span>📋</span> สรุปงานซ่อมทั้งหมด
         </h2>
-        <span class="badge badge-doing" style="font-size:14px; padding:6px 14px;">
-          ทั้งหมด ${periodFiltered.length} รายการ
-        </span>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="badge badge-doing" style="font-size:14px; padding:6px 14px;">
+            ทั้งหมด ${periodFiltered.length} รายการ
+          </span>
+          <button type="button" class="btn btn-outline btn-sm" onclick="exportAdminTickets()" style="font-weight:700; font-size:13.5px; height:36px; border-radius:8px; border-color:#0284c7; color:#0284c7; background:#fff; display:inline-flex; align-items:center; gap:6px;" title="ส่งออกรายงาน Excel/CSV">
+            📥 ส่งออก Excel
+          </button>
+        </div>
       </div>
 
       <!-- Filter Bar: ปุ่มเลือกปี + เลือกเดือน + รีเซ็ต -->
@@ -1313,7 +1416,7 @@ window.openAdminTicketModal = function(id) {
             </div>
             <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span></div>
             <div><b>หน่วยงาน / สังกัด :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span></div>
-            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span></div>
+            <div><b>เบอร์โทรศัพท์ :</b> <a href="tel:${esc(rep.tel.replace(/[^0-9+]/g, ''))}" style="font-weight:700; color:#0284c7; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(rep.tel)}</a></div>
             <div><b>อีเมล :</b> <span style="color:#334155;">${esc(rep.email)}</span></div>
           </div>
 
@@ -1346,8 +1449,8 @@ window.openAdminTicketModal = function(id) {
 
           <div style="font-size:15px; line-height:1.6; margin-bottom:14px;">
             <div><b>ช่างผู้รับผิดชอบ:</b> <span style="font-weight:700; color:#ea580c;">${esc(t.tech_name || 'ยังไม่ได้มอบหมาย')}</span></div>
-            <div style="margin-top:6px;"><b>📞 เบอร์ช่าง:</b> <span style="color:#0f172a;">${techTel ? esc(techTel) : '-'}</span></div>
-            <div style="margin-top:6px;"><b>✉️ อีเมลช่าง:</b> <span style="color:#0f172a;">${techEmail ? esc(techEmail) : '-'}</span></div>
+            <div style="margin-top:6px;"><b>📞 เบอร์ช่าง:</b> ${techTel ? `<a href="tel:${esc(techTel.replace(/[^0-9+]/g, ''))}" style="color:#0284c7; font-weight:700; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(techTel)}</a>` : '<span style="color:#94a3b8;">-</span>'}</div>
+            <div style="margin-top:6px;"><b>✉️ อีเมลช่าง:</b> ${techEmail ? `<a href="mailto:${esc(techEmail)}" style="color:#334155; text-decoration:none;">${esc(techEmail)}</a>` : '<span style="color:#94a3b8;">-</span>'}</div>
             <div style="margin-top:6px;"><b>💰 งบประมาณที่ใช้:</b> <span style="font-weight:700; color:#15803d;">${ticketBudgetText}</span></div>
             ${t.note ? `<div style="margin-top:6px;"><b>หมายเหตุช่าง:</b> <span style="color:#0f172a;">${esc(t.note)}</span></div>` : ''}
           </div>
@@ -1709,6 +1812,10 @@ function vStock() {
               ✕ รีเซ็ต
             </button>
           ` : ''}
+
+          <button type="button" class="btn btn-outline" style="font-weight:700; font-size:13.5px; height:42px; border-radius:10px; border-color:#0284c7; color:#0284c7; background:#fff; display:inline-flex; align-items:center; gap:6px;" onclick="exportMaterialsReport()" title="ส่งออกรายงานการเบิกวัสดุเป็นไฟล์ Excel/CSV">
+            📥 ส่งออก Excel
+          </button>
 
           <button class="btn btn-primary btn-sm" onclick="csv()" style="white-space:nowrap; height:42px; font-size:14px; font-weight:700; border-radius:10px; padding:0 14px;">
             📥 ส่งออก CSV

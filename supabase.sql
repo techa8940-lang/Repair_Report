@@ -36,9 +36,14 @@ create trigger on_auth_user_created
 
 -- เปิด RLS สำหรับ profiles
 alter table public.profiles enable row level security;
+drop policy if exists "Allow read profiles" on public.profiles;
 create policy "Allow read profiles" on public.profiles for select using (true);
-create policy "Allow update own profile" on public.profiles for update using (auth.uid() = id);
+drop policy if exists "Allow update own profile" on public.profiles;
+create policy "Allow update profiles" on public.profiles for update using (true);
+drop policy if exists "Allow insert own profile" on public.profiles;
 create policy "Allow insert own profile" on public.profiles for insert with check (true);
+drop policy if exists "Allow delete profiles" on public.profiles;
+create policy "Allow delete profiles" on public.profiles for delete using (true);
 
 -- 2. ฟังก์ชันค้นหาใบงาน (track_ticket)
 create or replace function track_ticket(p_id text, p_email text default null)

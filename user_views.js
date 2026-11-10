@@ -1254,7 +1254,7 @@ window.openReporterTicketModal = function(t) {
               <b>หน่วยงาน / สังกัด:</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span>
             </div>
             <div>
-              <b>เบอร์โทรศัพท์:</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span>
+              <b>เบอร์โทรศัพท์:</b> <a href="tel:${esc(rep.tel.replace(/[^0-9+]/g, ''))}" style="font-weight:700; color:#0284c7; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(rep.tel)}</a>
             </div>
             <div>
               <b>อีเมล:</b> <span style="color:#334155;">${esc(rep.email)}</span>

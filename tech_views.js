@@ -252,7 +252,7 @@ function vTaskDetail() {
             </div>
             <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span></div>
             <div><b>หน่วยงาน / สังกัด :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span></div>
-            <div><b>เบอร์โทรศัพท์ :</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span></div>
+            <div><b>เบอร์โทรศัพท์ :</b> <a href="tel:${esc(rep.tel.replace(/[^0-9+]/g, ''))}" style="font-weight:700; color:#0284c7; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(rep.tel)}</a></div>
             <div><b>อีเมล :</b> <span>${esc(rep.email)}</span></div>
             <div><b>วันที่แจ้งซ่อม :</b> <span style="color:var(--text-muted);">${esc(dateStr)}</span></div>
 
@@ -309,18 +309,19 @@ function vMine() {
   const stepsDef = [
     { key: 'accepted', num: 1, name: 'รับเรื่องแล้ว', icon: '📋' },
     { key: 'doing', num: 2, name: 'กำลังดำเนินการ', icon: '🔧' },
-    { key: 'done', num: 3, name: 'ซ่อมเสร็จสิ้น', icon: '👍' }
+    { key: 'checking', num: 3, name: 'ตรวจสอบงาน', icon: '🔍' },
+    { key: 'done', num: 4, name: 'ซ่อมเสร็จสิ้น', icon: '👍' }
   ];
 
   const countMap = {};
   stepsDef.forEach(s => {
-    countMap[s.key] = allMyTasks.filter(t => (t.status === s.key || (s.key === 'done' && t.status === 'closed') || (s.key === 'doing' && t.status === 'checking'))).length;
+    countMap[s.key] = allMyTasks.filter(t => (t.status === s.key || (s.key === 'done' && t.status === 'closed'))).length;
   });
 
   // 3. กรองรายการตามขั้นตอนที่เลือก (เวลากดไปที่แต่ละขั้น ก็ให้ขึ้นแต่รายการที่อยู่ในขั้นนั้นอยู่)
   let filtered = allMyTasks;
   if (mineStepFilter !== 'all') {
-    filtered = allMyTasks.filter(t => t.status === mineStepFilter || (mineStepFilter === 'done' && t.status === 'closed') || (mineStepFilter === 'doing' && t.status === 'checking'));
+    filtered = allMyTasks.filter(t => t.status === mineStepFilter || (mineStepFilter === 'done' && t.status === 'closed'));
   }
 
   // 4. จัดกลุ่มตามตำแหน่ง อาคารและชั้น
@@ -958,7 +959,7 @@ window.openAct = function (id) {
   const t = T.find(x => x.id === id) || (typeof found !== 'undefined' && found?.id === id ? found : { id });
   
   // กำหนดสเต็ปปัจจุบันของงาน (สิ้นสุดที่ซ่อมเสร็จสิ้น)
-  const validSteps = ['accepted', 'doing', 'done'];
+  const validSteps = ['accepted', 'doing', 'checking', 'done'];
   const curStatus = validSteps.includes(t.status) ? t.status : (t.status === 'closed' ? 'done' : 'doing');
   
   // กำหนดสเต็ปเป้าหมายเริ่มต้น: ให้เลื่อนไปข้างหน้า 1 ขั้นโดยอัตโนมัติเพื่อให้ช่างกดอัปเดตได้ง่าย
@@ -980,12 +981,14 @@ window.openAct = function (id) {
 
   const firstPhoto = (t.photos && t.photos.length) ? t.photos[0] : null;
   const currentAsset = t.items?.[0]?.asset || t.asset_no || t.asset || '';
+  const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : { name: t.name || t.reporter_name || '-', org: t.org || '-', tel: t.tel || '-', email: t.email || '-' };
 
   // กำหนดข้อมูลสเต็ปการทำงาน (4 ขั้นตอนสิ้นสุดที่ซ่อมเสร็จสิ้น)
   const stepsDef = [
     { key: 'accepted', num: 1, icon: '📋', name: 'รับเรื่องแล้ว', defSub: 'รับเรื่องเรียบร้อย' },
     { key: 'doing', num: 2, icon: '🔧', name: 'กำลังดำเนินการ', defSub: 'เจ้าหน้าที่เข้าตรวจ/ซ่อม' },
-    { key: 'done', num: 3, icon: '👍', name: 'เสร็จสิ้น', defSub: 'ยังไม่เสร็จ' }
+    { key: 'checking', num: 3, icon: '🔍', name: 'ตรวจสอบงาน', defSub: 'กำลังตรวจสอบ' },
+    { key: 'done', num: 4, icon: '👍', name: 'เสร็จสิ้น', defSub: 'ยังไม่เสร็จ' }
   ];
 
   $('#dlg').className = 'act-dialog-wide';
@@ -1025,9 +1028,9 @@ window.openAct = function (id) {
             <div style="font-weight:700; color:#0b2545; display:flex; align-items:center; gap:6px;">
               <span>👤</span> ผู้แจ้งซ่อม
             </div>
-            <div style="font-weight:600; font-size:14.5px;">${esc(t.name || t.reporter_name || t.email || '-')}</div>
+            <div style="font-weight:600; font-size:14.5px;">${esc(rep.name)} <span style="font-size:12.5px; color:#64748b; font-weight:normal;">(${esc(rep.org)})</span></div>
             <div style="color:#0369a1; font-weight:700; display:flex; align-items:center; gap:6px;">
-              <span>📞</span> ${esc(t.tel || '-')}
+              <span>📞</span> <a href="tel:${esc(rep.tel.replace(/[^0-9+]/g, ''))}" style="color:#0369a1; text-decoration:none;" title="แตะเพื่อโทรออก">${esc(rep.tel)}</a>
             </div>
           </div>
         </div>
@@ -1129,6 +1132,13 @@ window.previewActFiles = function(input) {
 };
 
 window.saveAct = async function (id) {
+  const submitBtn = document.querySelector('.act-submit-btn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.7';
+    submitBtn.innerHTML = '<span style="font-size:20px;">⏳</span><span>กำลังบันทึกข้อมูล...</span>';
+  }
+
   const t = T.find(x => x.id === id);
   const targetStep = currentActStep || 'doing';
   const noteVal = ($('#d_n')?.value || '').trim();
@@ -1137,7 +1147,7 @@ window.saveAct = async function (id) {
   toast(`กำลังอัปเดตสถานะเป็น "${ST[targetStep]?.[0] || targetStep}"...`);
 
   const p = {
-    status: targetStep,
+    status: targetStep === 'checking' ? 'doing' : targetStep,
     note: noteVal,
     history: logh(t, targetStep)
   };
@@ -1161,8 +1171,12 @@ window.saveAct = async function (id) {
     const fl = fileInput ? [...fileInput.files] : [];
     if (fl.length) {
       toast('กำลังอัปโหลดรูปภาพ...');
-      const uploaded = await up(fl, 'd/' + id);
-      p.done_photos = [...(t?.done_photos || []), ...uploaded];
+      try {
+        const uploaded = await up(fl, 'd/' + id);
+        p.done_photos = [...(t?.done_photos || []), ...uploaded];
+      } catch (upErr) {
+        console.warn('Image upload error (skipped):', upErr);
+      }
     }
 
     // อัปเดตข้อมูลลง Supabase tickets
@@ -1173,6 +1187,7 @@ window.saveAct = async function (id) {
 
     if (t) {
       Object.assign(t, p);
+      if (targetStep === 'checking') t.status = 'checking';
     }
 
     // ปิดหน้าต่าง dialog
@@ -1184,14 +1199,17 @@ window.saveAct = async function (id) {
     }
 
     // โหลดข้อมูลและเรนเดอร์ใหม่
-    await go();
+    await go(true);
     toast(`อัปเดตสถานะงานเป็น "${ST[targetStep]?.[0] || targetStep}" เรียบร้อยแล้ว`);
   } catch (err) {
     console.error('saveAct error:', err);
-    if (t) Object.assign(t, p);
+    if (t) {
+      Object.assign(t, p);
+      if (targetStep === 'checking') t.status = 'checking';
+    }
     $('#dlg').close();
     if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();
-    await go();
+    await go(true);
     toast('บันทึกสถานะเรียบร้อยแล้ว');
   }
 };

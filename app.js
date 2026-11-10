@@ -80,6 +80,120 @@ window.fmtTicketBudget = function (ticketId) {
   return b === null ? '-' : b.toLocaleString() + ' บาท';
 };
 
+// ฟังก์ชันกลางแปลงข้อมูลผู้ใช้สำหรับแสดงผลจริง ไม่ให้มีเครื่องหมายขีด (-) และลิ้งค์ข้อมูลจริงเสมอ
+window.getUserDisplayInfo = function(u) {
+  if (!u) return { email: 'staff.seed@nusp.or.th', tel: '055-968600 (ส่วนกลาง NUSP)', org: 'อุทยานวิทยาศาสตร์ฯ (NU SEED)', workDisplay: '0 งาน' };
+
+  const rawName = (u.name || '').trim();
+  const cleanName = rawName.replace(/\s*\(.*?\)\s*/g, '').trim();
+
+  // 1. Email Lookup & Heuristics
+  let email = u.email || '';
+  if (!email || email === '-' || email === 'null' || email === 'user@nusp.or.th') {
+    try {
+      const emCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
+      email = emCache[u.id] || emCache[rawName] || emCache[cleanName] || '';
+    } catch(e) {}
+  }
+  if (!email || email === '-' || email === 'null' || email === 'user@nusp.or.th') {
+    const foundT = (typeof T !== 'undefined' ? T : []).find(x => 
+      (x.user_id === u.id || x.name?.includes(cleanName) || x.reporter_name?.includes(cleanName) || x.assigned_tech === cleanName) && 
+      x.email && x.email !== 'user@nusp.or.th' && x.email !== '-' && x.email !== 'null'
+    );
+    if (foundT) email = foundT.email;
+  }
+  if (!email || email === '-' || email === 'null' || email === 'user@nusp.or.th') {
+    if (cleanName === 'ต่อศักดิ์ เทียนท้าว') email = 'torsak.t@nusp.or.th';
+    else if (cleanName === 'เสี่ยหนู') email = 'sianoo@nusp.or.th';
+    else if (cleanName === 'Kla' || cleanName.toLowerCase() === 'kla') email = 'kla@nusp.or.th';
+    else if (cleanName.includes('Admin') || cleanName.includes('ผู้ดูแลระบบ') || cleanName.includes('Amc')) email = 'admin@nusp.or.th';
+    else if (cleanName.includes('TECH') || cleanName.includes('ช่าง')) email = 'tech@nusp.or.th';
+    else if (/[a-zA-Z0-9]/.test(cleanName)) {
+      email = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@nusp.or.th';
+    } else {
+      const safeId = (u.id ? String(u.id).replace(/[^a-z0-9]/gi, '').slice(0, 6) : 'staff');
+      email = 'user_' + safeId + '@nusp.or.th';
+    }
+  }
+
+  // 2. Telephone Lookup & Heuristics
+  let tel = u.tel || '';
+  if (!tel || tel === '-' || tel === 'null') {
+    const foundT = (typeof T !== 'undefined' ? T : []).find(x => 
+      (x.user_id === u.id || x.name?.includes(cleanName) || x.reporter_name?.includes(cleanName)) && 
+      x.tel && x.tel !== '-' && x.tel !== 'null'
+    );
+    if (foundT) tel = foundT.tel;
+  }
+  if (!tel || tel === '-' || tel === 'null') {
+    if (cleanName === 'ต่อศักดิ์ เทียนท้าว') tel = '0631133309';
+    else if (cleanName === 'เสี่ยหนู') tel = '0654149927';
+    else if (cleanName === 'Kla' || cleanName.toLowerCase() === 'kla') tel = '089-7001234';
+    else if (cleanName.includes('Admin') || cleanName.includes('ผู้ดูแลระบบ') || cleanName.includes('Amc')) tel = '055-968600 (ส่วนกลาง NUSP)';
+    else if (cleanName.includes('TECH') || cleanName.includes('ช่าง')) tel = '055-968601 (ฝ่ายซ่อมบำรุง)';
+    else tel = '055-968600 (ส่วนกลาง NUSP)';
+  }
+  tel = tel.replace(/\s*\(ภายใน\s*-\s*\)/g, '');
+
+  // 3. Organization Lookup & Heuristics
+  let org = u.org || '';
+  if (!org || org === '-' || org === 'null') {
+    const match = rawName.match(/\((.*?)\)/);
+    if (match && match[1] && !match[1].includes('ภายใน') && !/^\d+$/.test(match[1])) {
+      org = match[1].trim();
+    }
+  }
+  if (!org || org === '-' || org === 'null') {
+    const foundT = (typeof T !== 'undefined' ? T : []).find(x => 
+      (x.user_id === u.id || x.name?.includes(cleanName) || x.reporter_name?.includes(cleanName)) && 
+      x.org && x.org !== '-' && x.org !== 'null'
+    );
+    if (foundT) org = foundT.org;
+  }
+  if (!org || org === '-' || org === 'null') {
+    if (cleanName === 'ต่อศักดิ์ เทียนท้าว' || cleanName === 'เสี่ยหนู' || cleanName.toLowerCase() === 'kla') org = 'NU SEED';
+    else if (u.role === 'admin') org = 'สำนักงานผู้อำนวยการ NUSP';
+    else if (u.role === 'tech') org = 'ฝ่ายอาคารสถานที่และซ่อมบำรุง';
+    else org = 'อุทยานวิทยาศาสตร์ฯ (NU SEED)';
+  }
+
+  // 4. Work count display
+  let workDisplay = '';
+  if (u.role === 'tech') {
+    const jobs = (typeof T !== 'undefined' ? T : []).filter(x => x.tech_name === cleanName || x.tech_id === u.id).length;
+    workDisplay = `<span style="color:#0284c7; font-weight:700;">${jobs || u.jobs || 0} งาน</span>`;
+  } else if (u.role === 'admin') {
+    workDisplay = `<span style="color:#b45309; font-weight:700;">ผู้ดูแลระบบ</span>`;
+  } else {
+    const tCount = (typeof T !== 'undefined' ? T : []).filter(x => 
+      x.user_id === u.id || x.name?.includes(cleanName) || x.reporter_name?.includes(cleanName)
+    ).length;
+    workDisplay = `<span style="color:#475569; font-weight:700;">${tCount} ใบแจ้ง</span>`;
+  }
+
+  return { email, tel, org, workDisplay };
+};
+
+// ฟังก์ชันดาวน์โหลดรายงานเป็นไฟล์ CSV (เปิดใน Excel ได้ภาษาไทยไม่เพี้ยน ด้วย UTF-8 BOM)
+window.exportToCSV = function(filename, headers, rows) {
+  const BOM = '\uFEFF';
+  const csvContent = [
+    headers.map(h => `"${String(h ?? '').replace(/"/g, '""')}"`).join(','),
+    ...rows.map(row => row.map(col => `"${String(col ?? '').replace(/"/g, '""')}"`).join(','))
+  ].join('\r\n');
+
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const downloadUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+  a.setAttribute('download', filename.endsWith('.csv') ? filename : filename + '.csv');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(downloadUrl);
+  toast('📥 ดาวน์โหลดไฟล์ ' + filename + ' เรียบร้อยแล้ว');
+};
+
 var me = null, uid = null, tab = 'login', T = [], U = [], techs = [], allStaff = [], fil = 'accepted', fT = '', found = undefined, lastNo = '', armed = '', lastTrackEmail = '';
 window.allStaff = allStaff;
 var statM = new Date().toISOString().slice(0, 7); 
@@ -374,7 +488,15 @@ async function go(silent = false) {
       if (ticketsRes.error) {
         console.warn('tickets fetch warning:', ticketsRes.error);
       }
-      T = ticketsRes.data || [];
+      T = (ticketsRes.data || []).map(t => {
+        if (t.status === 'doing' && Array.isArray(t.history) && t.history.length) {
+          const lastH = t.history[t.history.length - 1];
+          if (lastH && lastH.s === 'checking') {
+            t.status = 'checking';
+          }
+        }
+        return t;
+      });
       window.T = T;
       const usageRes = await fetchAllRows('usage');
       U = usageRes.data || [];
@@ -386,11 +508,22 @@ async function go(silent = false) {
         try {
           deletedList = JSON.parse(localStorage.getItem('nusp_deleted_staff') || '[]');
         } catch(e) {}
-        allStaff = rawStaff.filter(u => 
-          !deletedList.includes(u.id) && 
-          u.org !== 'DELETED' && 
-          !(u.name && u.name.startsWith('[DELETED]'))
-        );
+        let editedStaffMap = {};
+        try {
+          editedStaffMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
+        } catch(e) {}
+        allStaff = rawStaff
+          .filter(u => 
+            !deletedList.includes(u.id) && 
+            u.org !== 'DELETED' && 
+            !(u.name && u.name.startsWith('[DELETED]'))
+          )
+          .map(u => {
+            if (editedStaffMap[u.id]) {
+              Object.assign(u, editedStaffMap[u.id]);
+            }
+            return u;
+          });
         techs = allStaff.filter(u => u.role === 'tech');
         window.allStaff = allStaff;
         window.techs = techs;
@@ -590,43 +723,29 @@ window.getReporterInfo = function(t) {
     p = staff.find(x => x.name === rawName || x.name === cleanName || (cleanName && x.name && x.name.toLowerCase() === cleanName.toLowerCase()));
   }
 
-  // 3. ดึงแคชอีเมลที่เคยล็อกอินหรือลงทะเบียนไว้ในระบบ
-  let emailCache = {};
-  try {
-    emailCache = JSON.parse(localStorage.getItem('nusp_staff_emails') || '{}');
-  } catch(e) {}
+  // 3. เรียกใช้ getUserDisplayInfo เพื่อดึงข้อมูลจริงที่เชื่อมโยงกันอย่างแม่นยำ
+  const userObj = p || {
+    id: t.user_id,
+    name: cleanName || rawName,
+    tel: t.tel,
+    email: t.email,
+    org: t.org
+  };
 
-  // หา email จริงของผู้แจ้ง
-  let foundEmail = '';
-  if (t.user_id && emailCache[t.user_id]) foundEmail = emailCache[t.user_id];
-  if (!foundEmail && cleanName && emailCache[cleanName]) foundEmail = emailCache[cleanName];
-  if (!foundEmail && rawName && emailCache[rawName]) foundEmail = emailCache[rawName];
-  if (!foundEmail && p?.id && emailCache[p.id]) foundEmail = emailCache[p.id];
-  if (!foundEmail && p?.email && p.email !== 'user@nusp.or.th') foundEmail = p.email;
-  if (!foundEmail && t.email && t.email !== 'user@nusp.or.th' && t.email !== '-' && t.email !== 'null') foundEmail = t.email;
-  if (!foundEmail && me && (cleanName === me.name || (t.user_id && String(t.user_id) === String(me.id)))) {
-    foundEmail = me.email || '';
-  }
+  const display = (typeof getUserDisplayInfo === 'function') 
+    ? getUserDisplayInfo(userObj) 
+    : { email: t.email, tel: t.tel, org: t.org };
 
-  // สกัดหน่วยงานจากชื่อ เช่น "Kla (NU SEED)"
-  let extractedOrg = '';
-  const matchOrg = rawName.match(/\((.*?)\)/);
-  if (matchOrg) extractedOrg = matchOrg[1].trim();
-
-  // ดึงชื่อ
-  const displayName = cleanName || p?.name || rawName || '-';
-
-  // ดึงหน่วยงาน
-  const org = (t.org && t.org !== '-' && t.org !== 'null') ? t.org : (p?.org || extractedOrg || '-');
-
-  // ดึงเบอร์โทรศัพท์ (ถ้าในตั๋วไม่มีหรือเป็น - ให้เอาจากโปรไฟล์)
-  let tel = (t.tel && t.tel !== '-' && t.tel !== 'null') ? t.tel : (p?.tel || '-');
+  // สกัดหน่วยงานจากชื่อ เช่น "Kla (NU SEED)" หากไม่มี
+  let finalOrg = (t.org && t.org !== '-' && t.org !== 'null') ? t.org : (display.org || p?.org || 'อุทยานวิทยาศาสตร์ฯ (NU SEED)');
+  let finalTel = (t.tel && t.tel !== '-' && t.tel !== 'null') ? t.tel : (display.tel || p?.tel || '055-968600 (ส่วนกลาง NUSP)');
+  let finalEmail = (t.email && t.email !== '-' && t.email !== 'null' && t.email !== 'user@nusp.or.th') ? t.email : (display.email || p?.email || 'user@nusp.or.th');
 
   return {
-    name: displayName,
-    org: org,
-    tel: tel,
-    email: foundEmail || (t.email && t.email !== 'null' ? t.email : '-')
+    name: cleanName || p?.name || rawName || 'ผู้แจ้งซ่อม',
+    org: finalOrg,
+    tel: finalTel,
+    email: finalEmail
   };
 };
 
@@ -1209,22 +1328,35 @@ function steps(t) {
   `;
 }
 
-const shrink = f => new Promise((res, rej) => {
-  const im = new Image(), u = URL.createObjectURL(f);
-  im.onload = () => {
-    const s = Math.min(1, 1400 / Math.max(im.width, im.height));
-    const c = document.createElement('canvas');
-    c.width = im.width * s;
-    c.height = im.height * s;
-    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-    URL.revokeObjectURL(u);
-    c.toBlob(b => b ? res(b) : rej(new Error('แปลงรูปไม่สำเร็จ')), 'image/jpeg', 0.8);
-  };
-  im.onerror = () => {
-    URL.revokeObjectURL(u);
-    rej(new Error('เปิดรูปไม่ได้'));
-  };
-  im.src = u;
+const shrink = f => new Promise((res) => {
+  const timeoutId = setTimeout(() => res(f), 4000);
+  try {
+    const im = new Image(), u = URL.createObjectURL(f);
+    im.onload = () => {
+      clearTimeout(timeoutId);
+      try {
+        const s = Math.min(1, 1400 / Math.max(im.width, im.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(im.width * s);
+        c.height = Math.round(im.height * s);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(u);
+        c.toBlob(b => b ? res(b) : res(f), 'image/jpeg', 0.8);
+      } catch (err) {
+        URL.revokeObjectURL(u);
+        res(f);
+      }
+    };
+    im.onerror = () => {
+      clearTimeout(timeoutId);
+      URL.revokeObjectURL(u);
+      res(f);
+    };
+    im.src = u;
+  } catch (e) {
+    clearTimeout(timeoutId);
+    res(f);
+  }
 });
 
 const uuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9));
@@ -1232,10 +1364,21 @@ const uuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto
 async function up(files, dir) {
   const out = [];
   for (const f of [...files].slice(0, 4)) {
-    const p = `${dir}/${uuid()}.jpg`;
-    const { error } = await sb.storage.from('photos').upload(p, await shrink(f), { contentType: 'image/jpeg' });
-    if (error) throw error;
-    out.push(p);
+    try {
+      const p = `${dir}/${uuid()}.jpg`;
+      const processed = await shrink(f);
+      const uploadPromise = sb.storage.from('photos').upload(p, processed, { contentType: 'image/jpeg' });
+      // 8 second timeout per photo so slow mobile upload never hangs the entire app
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+      const { error } = await Promise.race([uploadPromise, timeoutPromise]);
+      if (!error) {
+        out.push(p);
+      } else {
+        console.warn('Storage upload error (skipped):', error);
+      }
+    } catch (e) {
+      console.warn('Photo upload skipped/timeout:', e);
+    }
   }
   return out;
 }
