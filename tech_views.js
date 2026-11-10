@@ -1220,7 +1220,7 @@ window.saveAct = async function (id) {
 
 let loginRole = 'reporter';
 let regRole = 'reporter';
-let authMode = 'login'; // 'login' | 'register'
+let authMode = 'login'; // 'login' | 'register' | 'forgot' | 'reset_password'
 
 window.setAuthMode = function(m) {
   authMode = m;
@@ -1274,16 +1274,33 @@ window.devQuickLogin = function(r) {
 };
 
 function vLogin() {
+  const isForgot = authMode === 'forgot';
+  const isReset = authMode === 'reset_password';
+  const isReg = authMode === 'register';
+
+  let titleText = 'ระบบแจ้งซ่อม NU SEED';
+  let subText = 'อุทยานวิทยาศาสตร์ มหาวิทยาลัยนเรศวร';
+  if (isForgot) {
+    titleText = '🔑 กู้คืนรหัสผ่าน';
+    subText = 'ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปยังอีเมลของคุณ';
+  } else if (isReset) {
+    titleText = '🔐 ตั้งรหัสผ่านใหม่';
+    subText = 'กำหนดรหัสผ่านใหม่สำหรับเข้าใช้งานระบบ';
+  } else if (isReg) {
+    titleText = '✨ สมัครสมาชิกใหม่';
+    subText = 'ระบบแจ้งซ่อม อุทยานวิทยาศาสตร์ มหาวิทยาลัยนเรศวร';
+  }
+
   return `
     <div style="width:100%; max-width: 480px; margin: 0 auto; padding: 12px 10px 32px;">
       <div class="content-card" style="padding: 28px 20px; box-shadow: var(--shadow-lg); border-radius: var(--radius-lg);">
         <div style="text-align: center; margin-bottom: 22px;">
           <img src="nu_seed_logo.png" alt="NU SEED" style="height: 92px; width: auto; object-fit: contain; margin: 0 auto 14px; display: block;">
-          <h1 style="font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">ระบบแจ้งซ่อม NU SEED</h1>
-          <p class="mut" style="font-size: 15px; color: var(--text-muted);">อุทยานวิทยาศาสตร์ มหาวิทยาลัยนเรศวร</p>
+          <h1 style="font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">${titleText}</h1>
+          <p class="mut" style="font-size: 15px; color: var(--text-muted);">${subText}</p>
         </div>
 
-        ${authMode === 'register' ? `
+        ${isReg ? `
           <!-- Register Form -->
           <form onsubmit="register(event)">
             <div class="form-group" style="margin-bottom:18px;">
@@ -1370,6 +1387,55 @@ function vLogin() {
               </a>
             </div>
           </form>
+        ` : isForgot ? `
+          <!-- Forgot Password Form -->
+          <form onsubmit="requestPasswordReset(event)">
+            <div style="background:var(--bg-subtle); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:18px; font-size:15px; color:var(--text-muted); line-height:1.5;">
+              ✉️ กรอกอีเมลที่คุณใช้สมัครสมาชิก ระบบจะจัดส่งลิงก์สำหรับกำหนดรหัสผ่านใหม่ไปยังกล่องข้อความของคุณ
+            </div>
+
+            <div class="form-group" style="margin-bottom:20px;">
+              <label style="font-size:17px; font-weight:700; color:var(--text-main);">อีเมลของคุณ <span class="req">*</span></label>
+              <input class="form-control" name="email" type="email" required placeholder="อีเมลของคุณ เช่น yourname@nusp.or.th" style="font-size:17px; min-height:50px;">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width:100%; min-height:54px; font-size:17.5px; font-weight:700; border-radius:var(--radius-md);">
+              ส่งลิงก์กู้คืนรหัสผ่าน ✉️
+            </button>
+
+            <div style="text-align:center; margin-top:22px; padding-top:16px; border-top:1px solid var(--border);">
+              <a href="javascript:void(0)" onclick="setAuthMode('login')" style="color:var(--primary); font-size:16px; font-weight:700; text-decoration:none;">
+                ← กลับไปหน้าเข้าสู่ระบบ
+              </a>
+            </div>
+          </form>
+        ` : isReset ? `
+          <!-- Reset New Password Form -->
+          <form onsubmit="saveNewPassword(event)">
+            <div style="background:var(--primary-light); color:var(--primary); border:1px solid rgba(249,115,22,0.3); border-radius:10px; padding:14px; margin-bottom:18px; font-size:15px; font-weight:600; line-height:1.5;">
+              🔑 บัญชีของคุณได้รับการยืนยันแล้ว กรุณากำหนดรหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)
+            </div>
+
+            <div class="form-group" style="margin-bottom:16px;">
+              <label style="font-size:17px; font-weight:700; color:var(--text-main);">รหัสผ่านใหม่ <span class="req">*</span></label>
+              <input class="form-control" name="new_pw" type="password" required minlength="6" placeholder="กำหนดรหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)" style="font-size:17px; min-height:50px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom:20px;">
+              <label style="font-size:17px; font-weight:700; color:var(--text-main);">ยืนยันรหัสผ่านใหม่อีกครั้ง <span class="req">*</span></label>
+              <input class="form-control" name="new_pw2" type="password" required minlength="6" placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง" style="font-size:17px; min-height:50px;">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width:100%; min-height:54px; font-size:18px; font-weight:700; border-radius:var(--radius-md);">
+              ✨ บันทึกรหัสผ่านใหม่และเข้าสู่ระบบ
+            </button>
+
+            <div style="text-align:center; margin-top:22px; padding-top:16px; border-top:1px solid var(--border);">
+              <a href="javascript:void(0)" onclick="setAuthMode('login')" style="color:var(--text-muted); font-size:15px; font-weight:600; text-decoration:none;">
+                ยกเลิกและกลับไปหน้าเข้าสู่ระบบ
+              </a>
+            </div>
+          </form>
         ` : `
           <!-- Login Form (Clean & Unified for Elderly and All Users) -->
           <form onsubmit="login(event)">
@@ -1378,12 +1444,17 @@ function vLogin() {
               <input class="form-control" name="email" type="email" required placeholder="อีเมลของคุณ เช่น yourname@nusp.or.th" style="font-size:17px; min-height:50px;">
             </div>
 
-            <div class="form-group" style="margin-bottom:22px;">
-              <label style="font-size:17px; font-weight:700; color:var(--text-main);">รหัสผ่าน <span class="req">*</span></label>
+            <div class="form-group" style="margin-bottom:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <label style="font-size:17px; font-weight:700; color:var(--text-main); margin:0;">รหัสผ่าน <span class="req">*</span></label>
+                <a href="javascript:void(0)" onclick="setAuthMode('forgot')" style="font-size:14.5px; font-weight:700; color:var(--primary); text-decoration:none;">
+                  ลืมรหัสผ่าน?
+                </a>
+              </div>
               <input class="form-control" name="pw" type="password" required placeholder="กรอกรหัสผ่านของคุณ" style="font-size:17px; min-height:50px;">
             </div>
 
-            <button type="submit" class="btn btn-primary" style="width:100%; min-height:54px; font-size:18px; font-weight:700; border-radius:var(--radius-md);">
+            <button type="submit" class="btn btn-primary" style="width:100%; min-height:54px; font-size:18px; font-weight:700; border-radius:var(--radius-md); margin-top:6px;">
               เข้าสู่ระบบ →
             </button>
           </form>

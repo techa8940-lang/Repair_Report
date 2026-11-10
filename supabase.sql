@@ -80,3 +80,26 @@ begin
 end $$;
 
 grant execute on function cancel_my_ticket to anon, authenticated;
+
+-- 4. ฟังก์ชันสำหรับแอดมินตั้ง/รีเซ็ตรหัสผ่านใหม่ให้ผู้ใช้โดยตรง (admin_reset_password)
+create extension if not exists "pgcrypto";
+
+create or replace function admin_reset_password(target_user_id uuid, new_password text)
+returns jsonb language plpgsql security definer as $$
+begin
+  -- อัปเดตเข้ารหัสผ่านใหม่ลงตาราง auth.users ของ Supabase
+  update auth.users
+  set encrypted_password = crypt(new_password, gen_salt('bf')),
+      updated_at = now()
+  where id = target_user_id;
+
+  if not found then
+    return jsonb_build_object('success', false, 'message', 'ไม่พบบัญชีผู้ใช้งานที่ระบุ');
+  end if;
+
+  return jsonb_build_object('success', true, 'message', 'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อย');
+end;
+$$;
+
+grant execute on function admin_reset_password to anon, authenticated, service_role;
+

@@ -889,6 +889,25 @@ window.openEditStaffModal = function(id) {
           <input class="form-control" name="skill" value="${esc(u.skill || '')}" placeholder="เช่น ไฟฟ้า, แสงสว่าง, ระบบปรับอากาศ" style="height:44px; font-size:15px;">
         </div>
 
+        <!-- 6. รีเซ็ต / กำหนดรหัสผ่านใหม่โดยแอดมิน (Admin Direct Password Reset) -->
+        <div style="background:#fffbeb; border:1.5px solid #fde68a; border-radius:12px; padding:14px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <label style="font-weight:800; color:#b45309; font-size:14px; display:flex; align-items:center; gap:6px; margin:0;">
+              <span>🔑</span> กำหนดรหัสผ่านใหม่โดยแอดมิน
+            </label>
+            <button type="button" class="btn btn-sm" onclick="generateRandomStaffPassword()" style="font-size:12px; padding:4px 10px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; font-weight:700; border-radius:6px; cursor:pointer;">
+              🎲 สุ่มรหัสผ่าน
+            </button>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input class="form-control" type="text" id="admin_reset_pw_input" name="new_password" placeholder="เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน" style="height:42px; font-size:14.5px; font-family:monospace; background:#ffffff;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="copyStaffPassword()" title="คัดลอกรหัสผ่าน" style="min-width:44px; padding:0; display:flex; align-items:center; justify-content:center; border-color:#cbd5e1; font-size:16px; cursor:pointer;">📋</button>
+          </div>
+          <div style="font-size:12px; color:#92400e; margin-top:6px; line-height:1.4;">
+            💡 หากต้องการเปลี่ยนรหัสผ่านให้ผู้ใช้นี้ กรอกรหัสใหม่ (อย่างน้อย 6 ตัวอักษร) หรือกดสุ่ม แล้วกดปุ่ม <b>"บันทึกการแก้ไข"</b>
+          </div>
+        </div>
+
         <!-- ปุ่ม Action ด้านล่าง: ซ้ายเป็นปุ่มลบบัญชี ขวาเป็นปุ่มยกเลิกและบันทึก -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1.5px solid #e2e8f0; padding-top:14px; flex-wrap:wrap; gap:10px;">
           <button type="button" class="btn" style="background:#dc2626; color:#ffffff; font-weight:700; padding:8px 14px; border-radius:8px; font-size:13.5px; display:inline-flex; align-items:center; gap:6px;" onclick="confirmDeleteStaff('${esc(u.id)}', '${esc(u.name || '')}', '${esc(role)}')">
@@ -911,6 +930,41 @@ window.toggleEditStaffRole = function(role) {
   if (skillGroup) skillGroup.style.display = role === 'tech' ? 'block' : 'none';
 };
 
+window.generateRandomStaffPassword = function() {
+  const chars = '0123456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  const newPw = 'Seed' + rand;
+  const input = document.getElementById('admin_reset_pw_input');
+  if (input) {
+    input.value = newPw;
+    input.focus();
+    toast('สุ่มรหัสผ่านใหม่: ' + newPw + ' (อย่าลืมกดปุ่มบันทึก)');
+  }
+};
+
+window.copyStaffPassword = function() {
+  const input = document.getElementById('admin_reset_pw_input');
+  const val = (input?.value || '').trim();
+  if (!val) {
+    toast('ไม่มีรหัสผ่านให้คัดลอก');
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(val).then(() => {
+      toast('คัดลอกรหัสผ่าน ' + val + ' แล้ว 📋');
+    }).catch(() => {
+      input.select();
+      document.execCommand('copy');
+      toast('คัดลอกรหัสผ่านแล้ว 📋');
+    });
+  } else {
+    input.select();
+    document.execCommand('copy');
+    toast('คัดลอกรหัสผ่านแล้ว 📋');
+  }
+};
+
 window.saveEditStaff = async function(e, id) {
   e.preventDefault();
   const f = new FormData(e.target);
@@ -921,8 +975,49 @@ window.saveEditStaff = async function(e, id) {
   const org = (f.get('org') || '').trim();
   const role_desc = (f.get('role_desc') || (role === 'admin' ? 'ผู้ดูแลระบบ' : role === 'reporter' ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง')).trim();
   const skill = (f.get('skill') || (role === 'tech' ? 'ทั่วไป' : '-')).trim();
+  const newPassword = (f.get('new_password') || '').trim();
+
+  if (newPassword && newPassword.length < 6) {
+    toast('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+    return;
+  }
 
   toast('กำลังบันทึกการแก้ไขบัญชี...');
+
+  // ถ้ามีการกำหนดรหัสผ่านใหม่
+  if (newPassword) {
+    if (DEV) {
+      toast('บันทึกรหัสผ่านใหม่สำเร็จ (DEV Mode): ' + newPassword);
+    } else if (me?.id && String(me.id) === String(id)) {
+      try {
+        const { error: pwErr } = await sb.auth.updateUser({ password: newPassword });
+        if (pwErr) console.warn('update own password error:', pwErr);
+      } catch (err) {
+        console.warn('update own password error:', err);
+      }
+    } else {
+      try {
+        const { data: rpcRes, error: rpcErr } = await sb.rpc('admin_reset_password', {
+          target_user_id: id,
+          new_password: newPassword
+        });
+        if (rpcErr) {
+          console.warn('admin_reset_password RPC error:', rpcErr);
+          toast('บันทึกข้อมูลแล้ว แต่รีเซ็ตรหัสผ่านไม่สำเร็จ: ' + rpcErr.message);
+        } else {
+          toast('✅ เปลี่ยนรหัสผ่านให้ผู้ใช้เรียบร้อย: ' + newPassword);
+        }
+      } catch (err) {
+        console.warn('admin reset password error:', err);
+      }
+    }
+
+    try {
+      const resetPws = JSON.parse(localStorage.getItem('nusp_reset_passwords') || '{}');
+      resetPws[id] = { password: newPassword, setAt: new Date().toISOString(), by: me?.name || 'Admin' };
+      localStorage.setItem('nusp_reset_passwords', JSON.stringify(resetPws));
+    } catch(e) {}
+  }
 
   // ส่งเฉพาะคอลัมน์ที่มีอยู่จริงใน profiles table เพื่อป้องกัน DB update error
   const updatePayload = {

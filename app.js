@@ -430,30 +430,63 @@ async function load(s) {
 }
 
 function initApp() {
-  const saved = sessionStorage.getItem('repair_me') || localStorage.getItem('repair_me_backup');
-  if (saved) {
-    try {
-      me = JSON.parse(saved);
-      if (me && me.role) {
-        tab = me.role === 'admin' ? 'dashboard' : me.role === 'tech' ? 'pool' : 'home';
-        render();
-        go(true);
-        return;
+  const hash = window.location.hash || '';
+  const isRecovery = hash.includes('type=recovery');
+
+  if (isRecovery) {
+    sessionStorage.removeItem('repair_me');
+    localStorage.removeItem('repair_me_backup');
+    me = null;
+    tab = 'login';
+    if (typeof setAuthMode === 'function') setAuthMode('reset_password');
+    else render();
+    toast('กรุณากำหนดรหัสผ่านใหม่ของคุณ ✨');
+  } else {
+    const saved = sessionStorage.getItem('repair_me') || localStorage.getItem('repair_me_backup');
+    if (saved) {
+      try {
+        me = JSON.parse(saved);
+        if (me && me.role) {
+          tab = me.role === 'admin' ? 'dashboard' : me.role === 'tech' ? 'pool' : 'home';
+          render();
+          go(true);
+          return;
+        }
+      } catch (e) {
+        sessionStorage.removeItem('repair_me');
+        localStorage.removeItem('repair_me_backup');
       }
-    } catch (e) {
-      sessionStorage.removeItem('repair_me');
-      localStorage.removeItem('repair_me_backup');
     }
+
+    me = null;
+    tab = 'login';
+    render();
   }
 
-  me = null;
-  tab = 'login';
-  render();
-
   if (!DEV) {
-    sb.auth.getSession().then(({ data }) => { if (data?.session) load(data.session); });
+    if (!isRecovery) {
+      sb.auth.getSession().then(({ data }) => { 
+        if (data?.session && !window.location.hash.includes('type=recovery')) {
+          load(data.session); 
+        }
+      });
+    }
+
     sb.auth.onAuthStateChange((event, s) => { 
-      if (event === 'SIGNED_IN' && s) load(s); 
+      if (event === 'PASSWORD_RECOVERY') {
+        tab = 'login';
+        if (typeof setAuthMode === 'function') setAuthMode('reset_password');
+        else render();
+        toast('กรุณากำหนดรหัสผ่านใหม่ของคุณ ✨');
+      } else if (event === 'SIGNED_IN' && s) { 
+        if (window.location.hash.includes('type=recovery')) {
+          tab = 'login';
+          if (typeof setAuthMode === 'function') setAuthMode('reset_password');
+          else render();
+        } else {
+          load(s); 
+        }
+      }
     });
   }
 }
@@ -680,6 +713,137 @@ window.register = async function (e) {
 
   toast(`ลงทะเบียนสำเร็จเป็น "${role === 'tech' ? 'ช่างซ่อมบำรุง' : 'ผู้แจ้งซ่อม'}" เรียบร้อยแล้ว! กรุณาเข้าสู่ระบบ`);
   if (typeof setAuthMode === 'function') setAuthMode('login');
+};
+
+// ส่งคำขอกู้คืนรหัสผ่านผ่านทางอีเมล (Self-service Password Reset)
+window.requestPasswordReset = async function (e) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const emailVal = (f.get('email') || '').trim();
+  if (!emailVal) return toast('กรุณาระบุอีเมลของคุณ');
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.7';
+    submitBtn.innerHTML = '<span>⏳ กำลังส่งลิงก์...</span>';
+  }
+
+  toast('กำลังดำเนินการส่งลิงก์กู้คืนรหัสผ่าน...');
+
+  if (DEV) {
+    setTimeout(() => {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.innerHTML = 'ส่งลิงก์กู้คืนรหัสผ่าน ✉️';
+      }
+      toast('ระบบจำลอง: ส่งลิงก์กู้คืนไปยัง ' + emailVal + ' สำเร็จแล้ว');
+      setTimeout(() => {
+        if (typeof setAuthMode === 'function') setAuthMode('reset_password');
+      }, 1000);
+    }, 600);
+    return;
+  }
+
+  try {
+    const isHttp = window.location.protocol.startsWith('http');
+    const resetOptions = {};
+    if (isHttp) {
+      resetOptions.redirectTo = window.location.origin + window.location.pathname;
+    }
+    const { data, error } = await sb.auth.resetPasswordForEmail(emailVal, resetOptions);
+
+    if (error) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.innerHTML = 'ส่งลิงก์กู้คืนรหัสผ่าน ✉️';
+      }
+      return toast('ไม่สามารถส่งลิงก์ได้: ' + error.message);
+    }
+
+    toast('ระบบได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปยัง ' + emailVal + ' แล้ว กรุณาตรวจสอบกล่องข้อความหรืออีเมลขยะ ✉️');
+    setTimeout(() => {
+      if (typeof setAuthMode === 'function') setAuthMode('login');
+    }, 2500);
+  } catch (err) {
+    console.error('Password reset request error:', err);
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      submitBtn.innerHTML = 'ส่งลิงก์กู้คืนรหัสผ่าน ✉️';
+    }
+    toast('เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
+  }
+};
+
+// บันทึกรหัสผ่านใหม่หลังเปิดลิงก์จากอีเมล (Save New Password)
+window.saveNewPassword = async function (e) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const pw = (f.get('new_pw') || '');
+  const pw2 = (f.get('new_pw2') || '');
+
+  if (!pw || pw.length < 6) {
+    return toast('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+  }
+  if (pw !== pw2) {
+    return toast('รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน');
+  }
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.7';
+    submitBtn.innerHTML = '<span>⏳ กำลังบันทึกรหัสผ่านใหม่...</span>';
+  }
+
+  toast('กำลังบันทึกรหัสผ่านใหม่...');
+
+  if (DEV) {
+    setTimeout(() => {
+      toast('ตั้งรหัสผ่านใหม่สำเร็จแล้ว (DEV Mode) 🎉');
+      if (typeof setAuthMode === 'function') setAuthMode('login');
+      render();
+    }, 600);
+    return;
+  }
+
+  try {
+    const { data, error } = await sb.auth.updateUser({ password: pw });
+    if (error) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.innerHTML = '✨ บันทึกรหัสผ่านใหม่และเข้าสู่ระบบ';
+      }
+      return toast('เปลี่ยนรหัสผ่านไม่สำเร็จ: ' + error.message);
+    }
+
+    // ล้าง URL hash ที่มี token ออกเพื่อความปลอดภัยและสะอาดตา
+    try {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch(e) {}
+
+    toast('ตั้งรหัสผ่านใหม่สำเร็จแล้ว! ยินดีต้อนรับเข้าสู่ระบบ 🎉');
+
+    const { data: sessionData } = await sb.auth.getSession();
+    if (sessionData?.session) {
+      await load(sessionData.session);
+    } else {
+      if (typeof setAuthMode === 'function') setAuthMode('login');
+      render();
+    }
+  } catch (err) {
+    console.error('saveNewPassword error:', err);
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      submitBtn.innerHTML = '✨ บันทึกรหัสผ่านใหม่และเข้าสู่ระบบ';
+    }
+    toast('เกิดข้อผิดพลาด: ' + (err.message || 'กรุณาลองใหม่อีกครั้ง'));
+  }
 };
 
 // ล็อคการทำงานและการเข้าถึงแท็บตาม Role
