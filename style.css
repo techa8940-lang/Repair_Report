@@ -1635,10 +1635,14 @@ dialog::backdrop {
 
 /* Sidebar Logo Image */
 .sidebar-logo-img {
-  height: 40px;
+  height: 52px;
   width: auto;
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
 }
 
 /* ==========================================================================

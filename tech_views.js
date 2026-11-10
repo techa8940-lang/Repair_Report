@@ -1260,7 +1260,7 @@ function vLogin() {
     <div style="width:100%; max-width: 480px; margin: 0 auto; padding: 12px 10px 32px;">
       <div class="content-card" style="padding: 28px 20px; box-shadow: var(--shadow-lg); border-radius: var(--radius-lg);">
         <div style="text-align: center; margin-bottom: 22px;">
-          <img src="nu_seed_logo.png" alt="NU SEED" style="height: 64px; width: auto; object-fit: contain; margin: 0 auto 12px; display: block;">
+          <img src="nu_seed_logo.png" alt="NU SEED" style="height: 92px; width: auto; object-fit: contain; margin: 0 auto 14px; display: block;">
           <h1 style="font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">ระบบแจ้งซ่อม NU SEED</h1>
           <p class="mut" style="font-size: 15px; color: var(--text-muted);">อุทยานวิทยาศาสตร์ มหาวิทยาลัยนเรศวร</p>
         </div>

@@ -123,7 +123,7 @@ function vHome() {
         <p>“พร้อมดูแล เพื่อการทำงานที่ต่อเนื่อง รวดเร็ว ปลอดภัย”</p>
       </div>
       <div class="hero-badge-nusp" style="display:flex; align-items:center; gap:12px;">
-        <img src="nu_seed_logo.png" alt="NU SEED" style="height:46px; width:auto; object-fit:contain;">
+        <img src="nu_seed_logo.png" alt="NU SEED" style="height:58px; width:auto; object-fit:contain; background:#ffffff; border-radius:10px; padding:3px; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
         <div>
           <b>NU SEED ✦</b>
           <span>Naresuan University<br>Science Park</span>
