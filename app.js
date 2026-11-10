@@ -1,4 +1,14 @@
-const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    // ปลดล็อค navigator.locks สำหรับมือถือ ป้องกันบั๊ก Web Locks API ค้างใน mobile browser
+    lock: async (_name, _acquireTimeout, fn) => {
+      return await fn();
+    }
+  }
+});
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = t => t ? new Date(t).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -346,12 +356,13 @@ window.loadHistoryData = async function() {
 
 async function load(s) {
   if (!s?.user) {
-    const saved = sessionStorage.getItem('repair_me');
+    const saved = sessionStorage.getItem('repair_me') || localStorage.getItem('repair_me_backup');
     if (saved) {
       try {
         me = JSON.parse(saved);
         tab = me.role === 'admin' ? 'dashboard' : me.role === 'tech' ? 'pool' : 'home';
-        await go();
+        render();
+        go(true);
         return;
       } catch(e) {}
     }
@@ -362,35 +373,43 @@ async function load(s) {
   const metaRole = s.user.user_metadata?.role;
   const metaName = s.user.user_metadata?.name;
 
-  const { data } = await sb.from('profiles').select('*').eq('id', uid).maybeSingle();
+  try {
+    const { data } = await Promise.race([
+      sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
+      new Promise(resolve => setTimeout(() => resolve({ data: null }), 3000))
+    ]);
 
-  if (data) {
-    me = data;
-    // ถ้า role ใน DB เป็น null/none ให้ดึงจาก user_metadata มาเติมและอัปเดตกลับเข้า DB
-    const finalRole = me.role || metaRole || 'reporter';
-    const finalName = me.name || metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0];
-    me.role = finalRole;
-    me.name = finalName;
-    me.email = s.user.email || me.email || localStorage.getItem('last_logged_in_email') || '';
-    try {
-      await sb.from('profiles').upsert({ id: uid, name: finalName, role: finalRole }, { onConflict: 'id' });
-    } catch(err) {}
-  } else {
-    const role = metaRole || (typeof loginRole !== 'undefined' && loginRole ? loginRole : 'reporter');
+    if (data) {
+      me = data;
+      const finalRole = me.role || metaRole || 'reporter';
+      const finalName = me.name || metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0];
+      me.role = finalRole;
+      me.name = finalName;
+      me.email = s.user.email || me.email || localStorage.getItem('last_logged_in_email') || '';
+      sb.from('profiles').upsert({ id: uid, name: finalName, role: finalRole }, { onConflict: 'id' }).catch(() => {});
+    } else {
+      const role = metaRole || (typeof loginRole !== 'undefined' && loginRole ? loginRole : 'reporter');
+      me = {
+        id: uid,
+        name: metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0],
+        role: role,
+        email: s.user.email || localStorage.getItem('last_logged_in_email') || ''
+      };
+      sb.from('profiles').upsert({ id: uid, name: me.name, role: me.role }, { onConflict: 'id' }).catch(() => {});
+    }
+
+    if (me.email) {
+      sb.from('profiles').update({ email: me.email }).eq('id', uid).catch(() => {});
+    }
+  } catch(err) {
+    console.warn('load profile error (skipped):', err);
+    const role = metaRole || 'reporter';
     me = {
       id: uid,
       name: metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0],
       role: role,
-      email: s.user.email || localStorage.getItem('last_logged_in_email') || ''
+      email: s.user.email || ''
     };
-    try {
-      await sb.from('profiles').upsert({ id: uid, name: me.name, role: me.role }, { onConflict: 'id' });
-    } catch(err) {}
-  }
-
-  // เก็บอีเมลลงตาราง profiles เพื่อให้ผู้แจ้งเห็นอีเมลช่างได้ (ต้องมีคอลัมน์ email — ดู add_profiles_email.sql)
-  if (me.email) {
-    try { await sb.from('profiles').update({ email: me.email }).eq('id', uid); } catch(err) {}
   }
 
   // อัปเดตตารางแคชอีเมลในระบบ
@@ -402,22 +421,28 @@ async function load(s) {
   } catch(e) {}
 
   sessionStorage.setItem('repair_me', JSON.stringify(me));
+  localStorage.setItem('repair_me_backup', JSON.stringify(me));
   tab = me.role === 'admin' ? 'dashboard' : me.role === 'tech' ? 'pool' : 'home';
-  await go();
+  
+  // เรนเดอร์หน้าจอเป้าหมายทันที เพื่อไม่ให้มือถือค้างรอโหลดข้อมูล
+  render();
+  go(true);
 }
 
 function initApp() {
-  const saved = sessionStorage.getItem('repair_me');
+  const saved = sessionStorage.getItem('repair_me') || localStorage.getItem('repair_me_backup');
   if (saved) {
     try {
       me = JSON.parse(saved);
       if (me && me.role) {
         tab = me.role === 'admin' ? 'dashboard' : me.role === 'tech' ? 'pool' : 'home';
-        go();
+        render();
+        go(true);
         return;
       }
     } catch (e) {
       sessionStorage.removeItem('repair_me');
+      localStorage.removeItem('repair_me_backup');
     }
   }
 
@@ -427,7 +452,9 @@ function initApp() {
 
   if (!DEV) {
     sb.auth.getSession().then(({ data }) => { if (data?.session) load(data.session); });
-    sb.auth.onAuthStateChange((_, s) => { if (s) load(s); });
+    sb.auth.onAuthStateChange((event, s) => { 
+      if (event === 'SIGNED_IN' && s) load(s); 
+    });
   }
 }
 
@@ -541,14 +568,48 @@ window.login = async function (e) {
   e.preventDefault();
   const f = new FormData(e.target);
   const emailVal = (f.get('email') || '').trim();
-  toast('กำลังตรวจสอบข้อมูลเข้าสู่ระบบ...');
-  const { data, error } = await sb.auth.signInWithPassword({ email: emailVal, password: f.get('pw') });
-  if (error) return toast('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
-  if (emailVal) {
-    localStorage.setItem('last_logged_in_email', emailVal);
-    localStorage.setItem('last_reporter_email', emailVal);
+  const pwVal = (f.get('pw') || '');
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.7';
+    submitBtn.innerHTML = '<span>⏳ กำลังตรวจสอบข้อมูล...</span>';
   }
-  load(data.session);
+
+  toast('กำลังตรวจสอบข้อมูลเข้าสู่ระบบ...');
+
+  try {
+    const signInPromise = sb.auth.signInWithPassword({ email: emailVal, password: pwVal });
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('การเชื่อมต่อกับเซิร์ฟเวอร์ใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง')), 10000)
+    );
+
+    const { data, error } = await Promise.race([signInPromise, timeoutPromise]);
+    if (error) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.innerHTML = 'เข้าสู่ระบบ →';
+      }
+      return toast('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
+    }
+
+    if (emailVal) {
+      localStorage.setItem('last_logged_in_email', emailVal);
+      localStorage.setItem('last_reporter_email', emailVal);
+    }
+    
+    await load(data.session);
+  } catch (err) {
+    console.error('Login error:', err);
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      submitBtn.innerHTML = 'เข้าสู่ระบบ →';
+    }
+    toast('เข้าสู่ระบบไม่สำเร็จ: ' + (err.message || 'โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'));
+  }
 };
 
 window.register = async function (e) {
@@ -660,6 +721,7 @@ window.setTab = function (k) {
 window.signOut = function () {
   if (confirm('คุณต้องการออกจากระบบใช่หรือไม่?')) {
     sessionStorage.removeItem('repair_me');
+    localStorage.removeItem('repair_me_backup');
     if (!DEV) sb.auth.signOut();
     me = null;
     uid = null;
