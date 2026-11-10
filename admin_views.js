@@ -322,18 +322,18 @@ function vTechsManage() {
       <div class="content-card">
         <!-- Filter Tabs & Actions Bar (ในกรอบเดียวกัน: ซ้ายมีแท็บเลื่อนแนวนอน ขวามีปุ่มเพิ่มบัญชีใหม่) -->
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
-          <div style="flex:1; min-width:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;">
-            <div class="filter-pills" style="margin:0; display:flex; gap:8px; flex-wrap:nowrap; width:max-content;">
-              <button class="filter-pill ${adminStaffRoleFilter === 'all' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('all')">
+          <div style="flex:1 1 100%; min-width:0;">
+            <div class="filter-pills admin-role-pills" style="margin:0; display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="filter-pill ${adminStaffRoleFilter === 'all' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('all')">
                 ทั้งหมด (${staffList.length})
               </button>
-              <button class="filter-pill ${adminStaffRoleFilter === 'reporter' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('reporter')">
+              <button class="filter-pill ${adminStaffRoleFilter === 'reporter' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('reporter')">
                 👤 ผู้แจ้งซ่อม (${allReporters.length})
               </button>
-              <button class="filter-pill ${adminStaffRoleFilter === 'tech' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('tech')">
+              <button class="filter-pill ${adminStaffRoleFilter === 'tech' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('tech')">
                 👨‍🔧 ช่างซ่อมบำรุง (${allTechs.length})
               </button>
-              <button class="filter-pill ${adminStaffRoleFilter === 'admin' ? 'active' : ''}" style="flex-shrink:0; white-space:nowrap;" onclick="setAdminStaffRoleFilter('admin')">
+              <button class="filter-pill ${adminStaffRoleFilter === 'admin' ? 'active' : ''}" onclick="setAdminStaffRoleFilter('admin')">
                 👑 ผู้ดูแลระบบ (${allAdmins.length})
               </button>
             </div>
@@ -488,21 +488,21 @@ function vTechsManage() {
         <div class="chart-card">
           <div class="chart-header" style="font-size:17px;">สรุปผู้ใช้งานในระบบ</div>
           <div style="padding:16px 8px; font-size:15px; display:flex; flex-direction:column; gap:12px;">
-            <div style="display:flex; justify-content:space-between;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
               <span class="mut">ผู้ใช้งานทั้งหมด:</span>
-              <b style="color:var(--primary); font-size:17px;">${staffList.length} ท่าน</b>
+              <b style="color:var(--primary); font-size:17px; white-space:nowrap; flex-shrink:0;">${staffList.length} ท่าน</b>
             </div>
-            <div style="display:flex; justify-content:space-between;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
               <span class="mut">ผู้แจ้งซ่อม (Reporter):</span>
-              <b style="color:#0284c7; font-size:17px;">${allReporters.length} ท่าน</b>
+              <b style="color:#0284c7; font-size:17px; white-space:nowrap; flex-shrink:0;">${allReporters.length} ท่าน</b>
             </div>
-            <div style="display:flex; justify-content:space-between;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
               <span class="mut">ช่างซ่อมบำรุง (Tech):</span>
-              <b style="color:#ea580c; font-size:17px;">${allTechs.length} ท่าน</b>
+              <b style="color:#ea580c; font-size:17px; white-space:nowrap; flex-shrink:0;">${allTechs.length} ท่าน</b>
             </div>
-            <div style="display:flex; justify-content:space-between;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
               <span class="mut">ผู้ดูแลระบบ (Admin):</span>
-              <b style="color:#b45309; font-size:17px;">${allAdmins.length} ท่าน</b>
+              <b style="color:#b45309; font-size:17px; white-space:nowrap; flex-shrink:0;">${allAdmins.length} ท่าน</b>
             </div>
           </div>
         </div>

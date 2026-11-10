@@ -3271,3 +3271,66 @@ dialog#dlg.admin-ticket-dialog-wide {
   .stack-sm { grid-template-columns: 1fr !important; }
   .role-grid { grid-template-columns: 1fr !important; }
 }
+
+/* ==========================================================================
+   แก้ให้เห็นครบในหน้าเดียว ไม่ต้องเลื่อนขวา (มือถือ)
+   - แอดมิน: แท็บกรองบทบาทในหน้า จัดการบัญชีผู้ใช้งาน
+   - ช่าง: แถบลำดับขั้นตอนในหน้า งานของฉัน
+   ========================================================================== */
+.admin-role-pills {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  width: 100% !important;
+  overflow: visible !important;
+  gap: 8px;
+}
+.admin-role-pills .filter-pill {
+  flex: 1 1 auto !important;      /* ขยายเต็มแถว แล้วตัดขึ้นบรรทัดใหม่เมื่อไม่พอ */
+  white-space: nowrap;
+  text-align: center;
+  justify-content: center;
+}
+
+.mine-stepper-track {
+  overflow-x: visible !important;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.mine-step-filter-btn {
+  min-width: 0 !important;        /* ยอมให้หดจนพอดีจอ */
+}
+.mine-stepper-arrow {
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .admin-role-pills .filter-pill {
+    font-size: 13.5px;
+    padding: 8px 10px;
+    flex: 1 1 calc(50% - 8px) !important;   /* มือถือ: 2 ปุ่มต่อแถว */
+  }
+
+  .mine-stepper-filter-card { padding: 12px 8px; }
+  .mine-stepper-track { gap: 2px; }
+  .mine-step-filter-btn {
+    padding: 8px 4px;
+    border-radius: 10px;
+  }
+  .mine-step-circle-badge {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+    margin-bottom: 4px;
+    box-shadow: none !important;
+  }
+  .mine-step-title-text {
+    font-size: 12.5px;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  .mine-step-count-pill {
+    font-size: 11px;
+    padding: 1px 6px;
+  }
+  .mine-stepper-arrow { font-size: 12px; }
+}
