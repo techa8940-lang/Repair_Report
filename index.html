@@ -68,11 +68,35 @@
   <dialog id="dlg"></dialog>
   <div id="toast"></div>
 
+  <!-- ป้องกันการเปิด DevTools / F12 / View Source เบื้องต้นสำหรับผู้ใช้ทั่วไปในโหมด Production -->
+  <script>
+    if (!window.CONFIG || !window.CONFIG.DEV) {
+      document.addEventListener('contextmenu', e => e.preventDefault());
+      document.addEventListener('keydown', e => {
+        if (
+          e.key === 'F12' ||
+          (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+          (e.ctrlKey && (e.key === 'u' || e.key === 'U'))
+        ) {
+          e.preventDefault();
+          return false;
+        }
+      });
+    }
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="config.js"></script>
-  <script src="app.js"></script>
-  <script src="user_views.js"></script>
-  <script src="tech_views.js"></script>
-  <script src="admin_views.js"></script>
+  <!-- โหลด Production Bundle (หรือแยกไฟล์เมื่อเปิดโหมด DEV) -->
+  <script>
+    if (window.CONFIG && window.CONFIG.DEV) {
+      document.write('<script src="app.js"><\/script>');
+      document.write('<script src="user_views.js"><\/script>');
+      document.write('<script src="tech_views.js"><\/script>');
+      document.write('<script src="admin_views.js"><\/script>');
+    } else {
+      document.write('<script src="bundle.min.js"><\/script>');
+    }
+  </script>
 </body>
 </html>
