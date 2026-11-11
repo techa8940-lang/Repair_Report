@@ -305,23 +305,30 @@ function vMine() {
       : (t.tech_id === me?.id || (me?.name && t.tech_name === me?.name))
   );
 
-  // 2. คำนวณจำนวนงานในแต่ละขั้นตอน (สิ้นสุดที่ซ่อมเสร็จสิ้น)
+  // 2. คำนวณจำนวนงานในแต่ละขั้นตอน (3 ขั้นตอน: รับเรื่องแล้ว -> กำลังดำเนินการ -> ซ่อมเสร็จสิ้น)
   const stepsDef = [
     { key: 'accepted', num: 1, name: 'รับเรื่องแล้ว', icon: '📋' },
     { key: 'doing', num: 2, name: 'กำลังดำเนินการ', icon: '🔧' },
-    { key: 'checking', num: 3, name: 'ตรวจสอบงาน', icon: '🔍' },
-    { key: 'done', num: 4, name: 'ซ่อมเสร็จสิ้น', icon: '👍' }
+    { key: 'done', num: 3, name: 'ซ่อมเสร็จสิ้น', icon: '👍' }
   ];
 
   const countMap = {};
   stepsDef.forEach(s => {
-    countMap[s.key] = allMyTasks.filter(t => (t.status === s.key || (s.key === 'done' && t.status === 'closed'))).length;
+    countMap[s.key] = allMyTasks.filter(t => {
+      if (s.key === 'doing') return t.status === 'doing' || t.status === 'checking';
+      if (s.key === 'done') return t.status === 'done' || t.status === 'closed';
+      return t.status === s.key;
+    }).length;
   });
 
   // 3. กรองรายการตามขั้นตอนที่เลือก (เวลากดไปที่แต่ละขั้น ก็ให้ขึ้นแต่รายการที่อยู่ในขั้นนั้นอยู่)
   let filtered = allMyTasks;
   if (mineStepFilter !== 'all') {
-    filtered = allMyTasks.filter(t => t.status === mineStepFilter || (mineStepFilter === 'done' && t.status === 'closed'));
+    filtered = allMyTasks.filter(t => {
+      if (mineStepFilter === 'doing') return t.status === 'doing' || t.status === 'checking';
+      if (mineStepFilter === 'done') return t.status === 'done' || t.status === 'closed';
+      return t.status === mineStepFilter;
+    });
   }
 
   // 4. จัดกลุ่มตามตำแหน่ง อาคารและชั้น
@@ -958,9 +965,9 @@ window.selectActStep = function(stepKey) {
 window.openAct = function (id) {
   const t = T.find(x => x.id === id) || (typeof found !== 'undefined' && found?.id === id ? found : { id });
   
-  // กำหนดสเต็ปปัจจุบันของงาน (สิ้นสุดที่ซ่อมเสร็จสิ้น)
-  const validSteps = ['accepted', 'doing', 'checking', 'done'];
-  const curStatus = validSteps.includes(t.status) ? t.status : (t.status === 'closed' ? 'done' : 'doing');
+  // กำหนดสเต็ปปัจจุบันของงาน (3 ขั้นตอน: รับเรื่องแล้ว -> กำลังดำเนินการ -> ซ่อมเสร็จสิ้น)
+  const validSteps = ['accepted', 'doing', 'done'];
+  const curStatus = (t.status === 'closed' || t.status === 'done') ? 'done' : (t.status === 'accepted' ? 'accepted' : 'doing');
   
   // กำหนดสเต็ปเป้าหมายเริ่มต้น: ให้เลื่อนไปข้างหน้า 1 ขั้นโดยอัตโนมัติเพื่อให้ช่างกดอัปเดตได้ง่าย
   const curIdx = validSteps.indexOf(curStatus);
@@ -983,12 +990,11 @@ window.openAct = function (id) {
   const currentAsset = t.items?.[0]?.asset || t.asset_no || t.asset || '';
   const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : { name: t.name || t.reporter_name || '-', org: t.org || '-', tel: t.tel || '-', email: t.email || '-' };
 
-  // กำหนดข้อมูลสเต็ปการทำงาน (4 ขั้นตอนสิ้นสุดที่ซ่อมเสร็จสิ้น)
+  // กำหนดข้อมูลสเต็ปการทำงาน (3 ขั้นตอน)
   const stepsDef = [
     { key: 'accepted', num: 1, icon: '📋', name: 'รับเรื่องแล้ว', defSub: 'รับเรื่องเรียบร้อย' },
     { key: 'doing', num: 2, icon: '🔧', name: 'กำลังดำเนินการ', defSub: 'เจ้าหน้าที่เข้าตรวจ/ซ่อม' },
-    { key: 'checking', num: 3, icon: '🔍', name: 'ตรวจสอบงาน', defSub: 'กำลังตรวจสอบ' },
-    { key: 'done', num: 4, icon: '👍', name: 'เสร็จสิ้น', defSub: 'ยังไม่เสร็จ' }
+    { key: 'done', num: 3, icon: '👍', name: 'ซ่อมเสร็จสิ้น', defSub: 'เสร็จสิ้นเรียบร้อย' }
   ];
 
   $('#dlg').className = 'act-dialog-wide';
@@ -1147,7 +1153,7 @@ window.saveAct = async function (id) {
   toast(`กำลังอัปเดตสถานะเป็น "${ST[targetStep]?.[0] || targetStep}"...`);
 
   const p = {
-    status: targetStep === 'checking' ? 'doing' : targetStep,
+    status: targetStep,
     note: noteVal,
     history: logh(t, targetStep)
   };
@@ -1187,7 +1193,6 @@ window.saveAct = async function (id) {
 
     if (t) {
       Object.assign(t, p);
-      if (targetStep === 'checking') t.status = 'checking';
     }
 
     // ปิดหน้าต่าง dialog
@@ -1205,7 +1210,6 @@ window.saveAct = async function (id) {
     console.error('saveAct error:', err);
     if (t) {
       Object.assign(t, p);
-      if (targetStep === 'checking') t.status = 'checking';
     }
     $('#dlg').close();
     if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();

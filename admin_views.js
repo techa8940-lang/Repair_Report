@@ -165,20 +165,22 @@ window.goToAllWithFilter = function(filterKey) {
 
 // Screen 5: Dashboard ภาพรวม
 function vDashboard() {
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
   const allTickets = [...(T || [])];
-  myT.forEach(mt => {
-    if (mt.no && !allTickets.some(x => x.id === mt.no)) {
-      allTickets.push({
-        id: mt.no,
-        title: mt.title,
-        status: mt.status || 'accepted',
-        cat: mt.type,
-        created_at: mt.date,
-        items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
-      });
-    }
-  });
+  if (window.CONFIG && window.CONFIG.DEV) {
+    const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+    myT.forEach(mt => {
+      if (mt.no && !allTickets.some(x => x.id === mt.no)) {
+        allTickets.push({
+          id: mt.no,
+          title: mt.title,
+          status: mt.status || 'accepted',
+          cat: mt.type,
+          created_at: mt.date,
+          items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
+        });
+      }
+    });
+  }
 
   const validList = allTickets.filter(t => t.status !== 'deleted');
   const total = validList.length;
@@ -1262,20 +1264,22 @@ window.confirmAssignDirect = async function(ticketId, techId) {
 
 // Screen: สรุปงานซ่อม (All Tickets Management)
 function vAll() {
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
   const allTickets = [...(T || [])];
-  myT.forEach(mt => {
-    if (mt.no && !allTickets.some(x => x.id === mt.no)) {
-      allTickets.push({
-        id: mt.no,
-        title: mt.title,
-        status: mt.status || 'accepted',
-        cat: mt.type,
-        created_at: mt.date,
-        items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
-      });
-    }
-  });
+  if (window.CONFIG && window.CONFIG.DEV) {
+    const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+    myT.forEach(mt => {
+      if (mt.no && !allTickets.some(x => x.id === mt.no)) {
+        allTickets.push({
+          id: mt.no,
+          title: mt.title,
+          status: mt.status || 'accepted',
+          cat: mt.type,
+          created_at: mt.date,
+          items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
+        });
+      }
+    });
+  }
 
   // เรียงลำดับจากใหม่สุดไปเก่าสุด
   allTickets.sort((a, b) => {
@@ -2268,20 +2272,22 @@ window.resetAssetSearch = function() {
 };
 
 function vAssetCheck() {
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
   const allTickets = [...(T || [])];
-  myT.forEach(mt => {
-    if (mt.no && !allTickets.some(x => x.id === mt.no)) {
-      allTickets.push({
-        id: mt.no,
-        title: mt.title,
-        status: mt.status || 'accepted',
-        cat: mt.type,
-        created_at: mt.date,
-        items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
-      });
-    }
-  });
+  if (window.CONFIG && window.CONFIG.DEV) {
+    const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+    myT.forEach(mt => {
+      if (mt.no && !allTickets.some(x => x.id === mt.no)) {
+        allTickets.push({
+          id: mt.no,
+          title: mt.title,
+          status: mt.status || 'accepted',
+          cat: mt.type,
+          created_at: mt.date,
+          items: [{ item: mt.title, sym: mt.details || '', asset: mt.asset_no || mt.asset || '' }]
+        });
+      }
+    });
+  }
 
   // รวบรวมรายชื่อปีที่มีในระบบ
   const yearSet = new Set();
