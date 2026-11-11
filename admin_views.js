@@ -839,6 +839,9 @@ window.openEditStaffModal = function(id) {
   const isTech = role === 'tech';
   const isReporter = !isAdmin && !isTech;
 
+  const displayInfo = (typeof getUserDisplayInfo === 'function') ? getUserDisplayInfo(u) : {};
+  const currentEmail = u.email || displayInfo.email || '';
+
   dlg.innerHTML = `
     <div style="padding:22px 24px; max-width:540px; margin:0 auto;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1.5px solid #e2e8f0; padding-bottom:12px;">
@@ -876,8 +879,8 @@ window.openEditStaffModal = function(id) {
 
         <!-- 3. อีเมล (บัญชี) -->
         <div class="form-group" style="margin-bottom:12px;">
-          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">อีเมล (Email) / บัญชีเข้าใช้งาน</label>
-          <input class="form-control" type="email" name="email" value="${esc(u.email || '')}" style="height:44px; font-size:15px; font-family:monospace;">
+          <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">อีเมล (Email) / บัญชีเข้าใช้งาน <span style="color:#ef4444;">*</span></label>
+          <input class="form-control" type="email" name="email" required value="${esc(currentEmail)}" placeholder="เช่น user@nusp.or.th" style="height:44px; font-size:15px; font-family:monospace;">
         </div>
 
         <!-- 4. เบอร์โทรศัพท์ & หน่วยงาน -->
@@ -1105,18 +1108,52 @@ window.saveEditStaff = async function(e, id) {
     }
   }
 
-  $('#dlg')?.close();
-
   if (passwordResult && !passwordResult.ok) {
+    $('#dlg')?.close();
     alert('⚠️ บันทึกข้อมูลโปรไฟล์แล้ว แต่ "รหัสผ่านยังไม่เปลี่ยนในระบบจริง"!\n\nสาเหตุ: ' + passwordResult.msg + '\n\n👉 สิ่งที่ต้องทำ: กรุณาเข้าไปที่ Supabase Dashboard > SQL Editor แล้วคัดลอกคำสั่งใน supabase.sql (หัวข้อที่ 4) ไปกด Run เพื่อเปิดใช้งานสิทธิ์การเปลี่ยนรหัสผ่าน');
+    render();
   } else if (passwordResult && passwordResult.ok) {
-    toast('✅ บันทึกข้อมูลและเปลี่ยนรหัสผ่านสำเร็จแล้ว: ' + newPassword);
-  } else {
-    toast('บันทึกการแก้ไขบัญชีผู้ใช้เรียบร้อยแล้ว');
-  }
+    const dlg = $('#dlg');
+    if (dlg) {
+      dlg.className = '';
+      dlg.innerHTML = `
+        <div style="padding:24px 22px; max-width:460px; margin:0 auto; text-align:center;">
+          <div style="font-size:52px; margin-bottom:10px;">🎉</div>
+          <h3 style="font-size:20px; font-weight:800; color:#15803d; margin:0 0 8px 0;">เปลี่ยนรหัสผ่านสำเร็จ!</h3>
+          <p style="font-size:14.5px; color:#475569; margin-bottom:16px;">
+            รหัสผ่านใหม่ของ <b>${esc(name)}</b> ได้รับการอัปเดตในระบบจริงเรียบร้อยแล้ว
+          </p>
 
-  render();
+          <div style="background:#f8fafc; border:1.5px solid #cbd5e1; border-radius:12px; padding:16px; text-align:left; font-size:15px; margin-bottom:20px; line-height:1.8;">
+            <div><b>อีเมล Login:</b> <span style="font-family:monospace; font-weight:700; color:#ea580c;">${esc(email)}</span></div>
+            <div><b>รหัสผ่านใหม่:</b> <span style="font-family:monospace; font-weight:800; color:#0b2545; font-size:18px;">${esc(newPassword)}</span></div>
+          </div>
+
+          <div style="display:flex; justify-content:center; gap:10px;">
+            <button type="button" class="btn btn-outline" style="min-width:130px; font-weight:700;" onclick="copyStaffPasswordDirect('${esc(newPassword)}')">
+              📋 คัดลอกรหัสผ่าน
+            </button>
+            <button type="button" class="btn btn-primary" style="min-width:110px; font-weight:700;" onclick="document.querySelector('#dlg').close(); render();">
+              เสร็จสิ้น
+            </button>
+          </div>
+        </div>
+      `;
+      dlg.showModal();
+    }
+  } else {
+    $('#dlg')?.close();
+    toast('บันทึกการแก้ไขบัญชีผู้ใช้เรียบร้อยแล้ว');
+    render();
+  }
 };
+
+window.copyStaffPasswordDirect = function(pw) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(pw).then(() => toast('คัดลอกรหัสผ่าน ' + pw + ' แล้ว 📋'));
+  } else {
+    toast('รหัสผ่าน: ' + pw);
+  }
 };
 
 // ยืนยันการลบบัญชีผู้ใช้ (Double Confirmation)
