@@ -1496,6 +1496,7 @@ function vAll() {
 
 // ป็อปอัพรายละเอียดงานซ่อมของแอดมิน (Pop-up Modal - ขยายขนาดพอดี ไม่ต้องเลื่อนซ้ายขวา)
 window.openAdminTicketModal = function(id) {
+  window._lastDetailTicketId = id;
   const t = (typeof T !== 'undefined' ? T.find(x => x.id === id) : null) || (JSON.parse(localStorage.getItem('myT') || '[]').find(x => x.no === id || x.id === id));
   if (!t) {
     toast('ไม่พบข้อมูลใบแจ้งซ่อม');
@@ -1551,7 +1552,7 @@ window.openAdminTicketModal = function(id) {
             <b>วันที่แจ้ง:</b> ${esc(dateStr)} ${t.done_at ? `| <b>เสร็จสิ้นเมื่อ:</b> ${fmt(t.done_at)}` : ''}
           </div>
         </div>
-        <button type="button" onclick="document.querySelector('#dlg').close()" style="background:none; border:none; font-size:26px; cursor:pointer; color:#64748b; line-height:1; padding:0 4px;">&times;</button>
+        <button type="button" onclick="window._lastDetailTicketId = null; document.querySelector('#dlg').close()" style="background:none; border:none; font-size:26px; cursor:pointer; color:#64748b; line-height:1; padding:0 4px;">&times;</button>
       </div>
 
       <!-- Stepper ลำดับขั้นตอน -->

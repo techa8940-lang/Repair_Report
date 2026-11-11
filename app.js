@@ -1200,6 +1200,10 @@ window.editTicketAsset = function(id) {
   const dlg = $('#dlg');
   if (!dlg) return;
 
+  const backAction = window._lastDetailTicketId === id 
+    ? `openAdminTicketModal('${esc(id)}')` 
+    : `document.querySelector('#dlg').close()`;
+
   dlg.className = '';
   dlg.innerHTML = `
     <div style="padding:12px 6px; max-width:460px; margin:0 auto;">
@@ -1207,7 +1211,7 @@ window.editTicketAsset = function(id) {
         <h3 style="margin:0; font-size:18px; font-weight:800; color:#0b2545; display:flex; align-items:center; gap:8px;">
           <span>🏷️</span> ระบุ / แก้ไขหมายเลขครุภัณฑ์
         </h3>
-        <button type="button" onclick="document.querySelector('#dlg').close()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b; line-height:1;">&times;</button>
+        <button type="button" onclick="${backAction}" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b; line-height:1;">&times;</button>
       </div>
 
       <div style="font-size:14.5px; color:#475569; margin-bottom:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; line-height:1.5;">
@@ -1217,12 +1221,12 @@ window.editTicketAsset = function(id) {
 
       <div class="form-group" style="margin-bottom:18px;">
         <label style="display:block; font-weight:700; color:#0b2545; margin-bottom:6px; font-size:14.5px;">หมายเลขครุภัณฑ์</label>
-        <input type="text" id="edit_asset_input" class="form-control" value="${esc(currentAsset)}" placeholder="เช่น 7440-001-0001/67" style="font-size:16px; padding:10px 12px; width:100%; border:1.5px solid #cbd5e1; border-radius:8px;">
+        <input type="text" id="edit_asset_input" class="form-control" value="${esc(currentAsset)}" placeholder="เช่น 7440-001-0001/67" style="font-size:16px; padding:10px 12px; width:100%; border:1.5px solid #cbd5e1; border-radius:8px;" autofocus>
         <small style="color:#64748b; font-size:13px; margin-top:6px; display:block;">(ช่างหรือแอดมินสามารถระบุหรือแก้ไขหมายเลขครุภัณฑ์เพิ่มเติม เพื่อความสะดวกในการติดตาม)</small>
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
-        <button type="button" class="btn btn-outline" onclick="document.querySelector('#dlg').close()" style="min-width:100px;">ยกเลิก</button>
+        <button type="button" class="btn btn-outline" onclick="${backAction}" style="min-width:100px;">ยกเลิก</button>
         <button type="button" class="btn btn-primary" onclick="saveTicketAsset('${esc(id)}')" style="min-width:150px; font-weight:700;">💾 บันทึกเลขครุภัณฑ์</button>
       </div>
     </div>
@@ -1234,43 +1238,85 @@ window.saveTicketAsset = async function(id) {
   const input = document.getElementById('edit_asset_input');
   const newAsset = input ? input.value.trim() : '';
 
+  const saveBtn = document.querySelector('#dlg button.btn-primary');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '⏳ กำลังบันทึก...';
+  }
+
   toast('กำลังบันทึกหมายเลขครุภัณฑ์...');
 
   const t = (typeof T !== 'undefined' ? T.find(x => x.id === id) : null);
+  
+  // สร้าง items array ที่ถูกต้องเสมอ
+  let itemsArr = [];
+  if (t && Array.isArray(t.items) && t.items.length) {
+    itemsArr = t.items.map((it, idx) => idx === 0 ? { ...it, asset: newAsset } : it);
+  } else {
+    itemsArr = [{ item: t?.title || 'รายการซ่อม', sym: t?.details || '', asset: newAsset }];
+  }
+
+  // อัปเดตในหน่วยความจำทันที
   if (t) {
-    if (!t.items || !t.items.length) {
-      t.items = [{ item: t.title || 'รายการซ่อม', sym: t.details || '', asset: newAsset }];
-    } else {
-      t.items[0].asset = newAsset;
-    }
+    t.items = itemsArr;
     t.asset_no = newAsset;
     t.asset = newAsset;
   }
 
-  // Update in localStorage myT if exists
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
-  const localIdx = myT.findIndex(x => (x.no === id || x.id === id));
-  if (localIdx >= 0) {
-    myT[localIdx].asset = newAsset;
-    myT[localIdx].asset_no = newAsset;
-    localStorage.setItem('myT', JSON.stringify(myT));
-  }
-
-  // Update in Supabase
+  // อัปเดตใน localStorage myT (ถ้ามี)
   try {
-    const updatePayload = { asset_no: newAsset };
-    if (t && t.items) updatePayload.items = t.items;
-    const { error } = await sb.from('tickets').update(updatePayload).eq('id', id);
-    if (error) console.warn('Supabase asset update warning:', error);
+    const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+    const localIdx = myT.findIndex(x => (x.no === id || x.id === id));
+    if (localIdx >= 0) {
+      myT[localIdx].asset = newAsset;
+      myT[localIdx].asset_no = newAsset;
+      localStorage.setItem('myT', JSON.stringify(myT));
+    }
+  } catch(e) {}
+
+  // อัปเดตลง Supabase อย่างปลอดภัย
+  let updateSuccess = false;
+  try {
+    // วิธีที่ 1: ลองอัปเดตทั้ง items และ asset_no
+    let res = await sb.from('tickets').update({ items: itemsArr, asset_no: newAsset }).eq('id', id);
+    if (res?.error) {
+      // วิธีที่ 2: ถ้าไม่มีคอลัมน์ asset_no ให้อัปเดตเฉพาะ items (jsonb)
+      console.warn('Attempt 1 warning, fallback to items-only update:', res.error);
+      res = await sb.from('tickets').update({ items: itemsArr }).eq('id', id);
+    }
+
+    if (res?.error) {
+      console.error('Supabase update failed:', res.error);
+      toast('⚠️ บันทึกไม่สำเร็จ: ' + (res.error.message || 'เกิดข้อผิดพลาด'));
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '💾 บันทึกเลขครุภัณฑ์';
+      }
+      return;
+    }
+    updateSuccess = true;
   } catch (err) {
-    console.warn('saveTicketAsset error:', err);
+    console.error('saveTicketAsset error:', err);
   }
 
-  $('#dlg')?.close();
-  toast('บันทึกหมายเลขครุภัณฑ์เรียบร้อยแล้ว');
+  toast('✅ บันทึกหมายเลขครุภัณฑ์เรียบร้อยแล้ว');
+
+  const wasInDetail = window._lastDetailTicketId === id;
+
   if (typeof broadcastTicketUpdate === 'function') broadcastTicketUpdate();
-  if (typeof go === 'function') go();
-  else render();
+  
+  if (typeof go === 'function') {
+    await go(true);
+  } else {
+    render();
+  }
+
+  // ถ้าเปิดมาจากหน้ารายละเอียด ให้เปิดหน้ารายละเอียดกลับขึ้นมาพร้อมเลขครุภัณฑ์ใหม่ทันที
+  if (wasInDetail && typeof openAdminTicketModal === 'function') {
+    openAdminTicketModal(id);
+  } else {
+    $('#dlg')?.close();
+  }
 };
 
 const card = (t, x = '') => {
