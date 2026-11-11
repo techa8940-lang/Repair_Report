@@ -9,6 +9,7 @@ create table if not exists public.profiles (
 );
 
 -- Trigger สร้างข้อมูลลง profiles อัตโนมัติเมื่อมีการ Register ผ่าน auth.users
+-- ความปลอดภัย: ป้องกันไม่ให้ผู้สมัครผ่านหน้าเว็บทั่วไปกำหนดสิทธิ์ตัวเองเป็น 'admin' โดยตรง
 create or replace function public.handle_new_user() 
 returns trigger as $$
 begin
@@ -16,13 +17,15 @@ begin
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    coalesce(new.raw_user_meta_data->>'role', 'reporter'),
+    case 
+      when new.raw_user_meta_data->>'role' = 'tech' then 'tech'
+      else 'reporter' -- บังคับให้ role เริ่มต้นเป็น reporter เท่านั้น ไม่อนุญาตให้สมัครเป็น admin ได้เอง
+    end,
     new.raw_user_meta_data->>'tel',
     new.raw_user_meta_data->>'org'
   )
   on conflict (id) do update set
     name = excluded.name,
-    role = excluded.role,
     tel = excluded.tel,
     org = excluded.org;
   return new;
@@ -34,16 +37,64 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- เปิด RLS สำหรับ profiles
+-- Trigger ป้องกันการเปลี่ยนบทบาท (Role Escalation Protection)
+-- ป้องกันไม่ให้ผู้ใช้ทั่วไปแอบส่ง query แก้ไขฟิลด์ role ของตัวเองเป็น admin
+create or replace function public.protect_profile_role()
+returns trigger as $$
+declare
+  v_caller_role text;
+begin
+  -- ถ้า role ไม่ได้เปลี่ยนแปลง ให้ผ่านได้ตามปกติ
+  if NEW.role is not distinct from OLD.role then
+    return NEW;
+  end if;
+
+  -- ตรวจสอบว่าผู้ที่ส่งคำสั่งอัปเดตเป็น Admin หรือ service_role หรือไม่
+  select role into v_caller_role from public.profiles where id = auth.uid();
+  if (auth.role() is distinct from 'service_role') and (v_caller_role is distinct from 'admin') then
+    -- หากไม่ใช่แอดมิน ให้บังคับใช้ role เดิมเสมอ ห้ามเปลี่ยนเป็นอันขาด
+    NEW.role := OLD.role;
+  end if;
+
+  return NEW;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists tr_protect_profile_role on public.profiles;
+create trigger tr_protect_profile_role
+  before update on public.profiles
+  for each row execute procedure public.protect_profile_role();
+
+-- เปิด RLS สำหรับ profiles แบบรัดกุม (Secure Row Level Security)
 alter table public.profiles enable row level security;
+
+-- อ่านข้อมูล: อ่านได้ทุกคนเพื่อแสดงชื่อผู้แจ้งและเบอร์ติดต่อช่าง
 drop policy if exists "Allow read profiles" on public.profiles;
 create policy "Allow read profiles" on public.profiles for select using (true);
+
+-- อัปเดตข้อมูล: ผู้ใช้แก้ได้เฉพาะโปรไฟล์ตัวเอง และแอดมินแก้ได้ทุกคน (ฟิลด์ role ถูกล็อคด้วย Trigger ด้านบน)
 drop policy if exists "Allow update own profile" on public.profiles;
-create policy "Allow update profiles" on public.profiles for update using (true);
+drop policy if exists "Allow update profiles" on public.profiles;
+create policy "Allow update profiles" on public.profiles for update using (
+  auth.uid() = id
+  or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  or auth.role() = 'service_role'
+);
+
+-- เพิ่มข้อมูล: บัญชีตนเอง หรือ แอดมินสร้างให้
 drop policy if exists "Allow insert own profile" on public.profiles;
-create policy "Allow insert own profile" on public.profiles for insert with check (true);
+create policy "Allow insert profiles" on public.profiles for insert with check (
+  auth.uid() = id
+  or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  or auth.role() = 'service_role'
+);
+
+-- ลบข้อมูล: เฉพาะแอดมินเท่านั้นที่มีสิทธิ์ลบโปรไฟล์
 drop policy if exists "Allow delete profiles" on public.profiles;
-create policy "Allow delete profiles" on public.profiles for delete using (true);
+create policy "Allow delete profiles" on public.profiles for delete using (
+  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  or auth.role() = 'service_role'
+);
 
 -- 2. ฟังก์ชันค้นหาใบงาน (track_ticket)
 create or replace function track_ticket(p_id text, p_email text default null)
@@ -106,6 +157,17 @@ declare
 begin
   if new_password is null or length(trim(new_password)) < 6 then
     return jsonb_build_object('success', false, 'message', 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+  end if;
+
+  -- 0. ตรวจสอบสิทธิ์ความปลอดภัย (Authorization Check): เฉพาะ Admin หรือ service_role เท่านั้นที่มีสิทธิ์รันคำสั่งนี้
+  if (auth.role() is distinct from 'service_role') and not exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin'
+  ) then
+    return jsonb_build_object(
+      'success', false, 
+      'message', 'ปฏิเสธการเข้าถึง: เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถเปลี่ยนรหัสผ่านของผู้อื่นได้'
+    );
   end if;
 
   -- 1. เข้ารหัสผ่านใหม่ด้วยมาตรฐาน bcrypt cost 10 ที่ Supabase GoTrue รองรับ 100%
