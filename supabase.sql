@@ -84,22 +84,120 @@ grant execute on function cancel_my_ticket to anon, authenticated;
 -- 4. ฟังก์ชันสำหรับแอดมินตั้ง/รีเซ็ตรหัสผ่านใหม่ให้ผู้ใช้โดยตรง (admin_reset_password)
 create extension if not exists "pgcrypto";
 
-create or replace function admin_reset_password(target_user_id uuid, new_password text)
-returns jsonb language plpgsql security definer as $$
-begin
-  -- อัปเดตเข้ารหัสผ่านใหม่ลงตาราง auth.users ของ Supabase
-  update auth.users
-  set encrypted_password = crypt(new_password, gen_salt('bf')),
-      updated_at = now()
-  where id = target_user_id;
+-- ลบเวอร์ชันเดิมออกเพื่อป้องกันปัญหา Signature ทับซ้อน
+drop function if exists public.admin_reset_password(uuid, text);
+drop function if exists public.admin_reset_password(text, text);
+drop function if exists public.admin_reset_password(text, text, text);
 
-  if not found then
-    return jsonb_build_object('success', false, 'message', 'ไม่พบบัญชีผู้ใช้งานที่ระบุ');
+create or replace function public.admin_reset_password(
+  target_user_id text, 
+  new_password text,
+  target_email text default null
+)
+returns jsonb 
+language plpgsql 
+security definer 
+set search_path = public, auth, extensions 
+as $$
+declare
+  v_user_id uuid;
+  v_email text := trim(lower(coalesce(target_email, '')));
+  v_encrypted_pw text;
+begin
+  if new_password is null or length(trim(new_password)) < 6 then
+    return jsonb_build_object('success', false, 'message', 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
   end if;
 
-  return jsonb_build_object('success', true, 'message', 'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อย');
+  -- 1. เข้ารหัสผ่านใหม่ด้วยมาตรฐาน bcrypt cost 10 ที่ Supabase GoTrue รองรับ 100%
+  v_encrypted_pw := extensions.crypt(new_password, extensions.gen_salt('bf', 10));
+
+  -- 2. ค้นหา User ID
+  -- 2.1 ตรวจสอบว่า target_user_id เป็น UUID หรือไม่
+  begin
+    if target_user_id is not null and target_user_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      v_user_id := target_user_id::uuid;
+    end if;
+  exception when others then
+    v_user_id := null;
+  end;
+
+  -- 2.2 ค้นหาใน auth.users ด้วย id หรือ email
+  if v_user_id is not null then
+    perform 1 from auth.users where id = v_user_id;
+    if not found and v_email <> '' then
+      select id into v_user_id from auth.users where lower(email) = v_email limit 1;
+    end if;
+  elsif v_email <> '' then
+    select id into v_user_id from auth.users where lower(email) = v_email limit 1;
+  end if;
+
+  -- 3. หากพบบัญชีใน auth.users ให้อัปเดตรหัสผ่านและยืนยันอีเมลทันที
+  if v_user_id is not null then
+    update auth.users
+    set encrypted_password = v_encrypted_pw,
+        email_confirmed_at = coalesce(email_confirmed_at, now()),
+        updated_at = now()
+    where id = v_user_id;
+
+    return jsonb_build_object(
+      'success', true, 
+      'message', 'เปลี่ยนรหัสผ่านใน auth.users สำเร็จเรียบร้อย',
+      'user_id', v_user_id
+    );
+  end if;
+
+  -- 4. หากยังไม่มีบัญชีใน auth.users (เช่น ถูกสร้างเฉพาะใน profiles) ให้สร้างบัญชี Login ใหม่ทันที
+  if v_email <> '' then
+    if v_user_id is null then
+      v_user_id := extensions.gen_random_uuid();
+    end if;
+
+    insert into auth.users (
+      id,
+      instance_id,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      raw_app_meta_data,
+      raw_user_meta_data,
+      created_at,
+      updated_at,
+      role,
+      aud
+    ) values (
+      v_user_id,
+      '00000000-0000-0000-0000-000000000000'::uuid,
+      v_email,
+      v_encrypted_pw,
+      now(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      '{}'::jsonb,
+      now(),
+      now(),
+      'authenticated',
+      'authenticated'
+    );
+
+    -- ซิงค์ id ใน profiles ให้ตรงกัน
+    if target_user_id is not null and target_user_id <> v_user_id::text then
+      update public.profiles
+      set id = v_user_id
+      where id::text = target_user_id or lower(coalesce(email, '')) = v_email;
+    end if;
+
+    return jsonb_build_object(
+      'success', true, 
+      'message', 'สร้างและกำหนดรหัสผ่านใน auth.users สำเร็จเรียบร้อย',
+      'user_id', v_user_id
+    );
+  end if;
+
+  return jsonb_build_object(
+    'success', false, 
+    'message', 'ไม่พบบัญชีผู้ใช้ในระบบ และไม่มีข้อมูลอีเมลสำหรับสร้างหรือเปลี่ยนรหัสผ่าน'
+  );
 end;
 $$;
 
-grant execute on function admin_reset_password to anon, authenticated, service_role;
+grant execute on function public.admin_reset_password(text, text, text) to anon, authenticated, service_role;
 

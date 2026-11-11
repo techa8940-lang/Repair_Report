@@ -735,6 +735,20 @@ window.saveNewStaff = async function(e) {
     console.warn('Auth sign up error:', err);
   }
 
+  // หากสร้างผ่าน signUp ไม่สำเร็จ (เช่น มี session แอดมินอยู่แล้ว) ให้เรียก admin_reset_password เพื่อสร้างใน auth.users ให้
+  if (!authUserId) {
+    try {
+      const { data: rpcRes } = await sb.rpc('admin_reset_password', {
+        target_user_id: 'new',
+        new_password: password,
+        target_email: email
+      });
+      if (rpcRes?.user_id) authUserId = rpcRes.user_id;
+    } catch (e) {
+      console.warn('RPC create fallback warning:', e);
+    }
+  }
+
   const staffId = authUserId || ('staff_' + Date.now());
   const newStaffObj = {
     id: staffId,
@@ -984,37 +998,48 @@ window.saveEditStaff = async function(e, id) {
 
   toast('กำลังบันทึกการแก้ไขบัญชี...');
 
+  let passwordResult = null; // null | { ok: true, msg: string } | { ok: false, msg: string }
+
   // ถ้ามีการกำหนดรหัสผ่านใหม่
   if (newPassword) {
     if (DEV) {
-      toast('บันทึกรหัสผ่านใหม่สำเร็จ (DEV Mode): ' + newPassword);
+      passwordResult = { ok: true, msg: 'บันทึกรหัสผ่านใหม่สำเร็จ (DEV Mode): ' + newPassword };
     } else if (me?.id && String(me.id) === String(id)) {
       try {
         const { error: pwErr } = await sb.auth.updateUser({ password: newPassword });
-        if (pwErr) console.warn('update own password error:', pwErr);
+        if (pwErr) {
+          console.warn('update own password error:', pwErr);
+          passwordResult = { ok: false, msg: pwErr.message };
+        } else {
+          passwordResult = { ok: true, msg: 'เปลี่ยนรหัสผ่านบัญชีของคุณเรียบร้อย: ' + newPassword };
+        }
       } catch (err) {
         console.warn('update own password error:', err);
+        passwordResult = { ok: false, msg: err.message };
       }
     } else {
       try {
         const { data: rpcRes, error: rpcErr } = await sb.rpc('admin_reset_password', {
-          target_user_id: id,
-          new_password: newPassword
+          target_user_id: String(id),
+          new_password: newPassword,
+          target_email: email || ''
         });
-        if (rpcErr) {
-          console.warn('admin_reset_password RPC error:', rpcErr);
-          toast('บันทึกข้อมูลแล้ว แต่รีเซ็ตรหัสผ่านไม่สำเร็จ: ' + rpcErr.message);
+        if (rpcErr || (rpcRes && rpcRes.success === false)) {
+          const failMsg = rpcErr?.message || rpcRes?.message || 'ฟังก์ชันรีเซ็ตรหัสผ่านไม่ตอบสนอง';
+          console.warn('admin_reset_password RPC error:', rpcErr || rpcRes);
+          passwordResult = { ok: false, msg: failMsg };
         } else {
-          toast('✅ เปลี่ยนรหัสผ่านให้ผู้ใช้เรียบร้อย: ' + newPassword);
+          passwordResult = { ok: true, msg: 'เปลี่ยนรหัสผ่านให้ผู้ใช้เรียบร้อย: ' + newPassword };
         }
       } catch (err) {
         console.warn('admin reset password error:', err);
+        passwordResult = { ok: false, msg: err.message };
       }
     }
 
     try {
       const resetPws = JSON.parse(localStorage.getItem('nusp_reset_passwords') || '{}');
-      resetPws[id] = { password: newPassword, setAt: new Date().toISOString(), by: me?.name || 'Admin' };
+      resetPws[id] = { password: newPassword, setAt: new Date().toISOString(), by: me?.name || 'Admin', status: passwordResult?.ok ? 'success' : 'failed' };
       localStorage.setItem('nusp_reset_passwords', JSON.stringify(resetPws));
     } catch(e) {}
   }
@@ -1081,8 +1106,17 @@ window.saveEditStaff = async function(e, id) {
   }
 
   $('#dlg')?.close();
-  toast('บันทึกการแก้ไขบัญชีผู้ใช้เรียบร้อยแล้ว');
+
+  if (passwordResult && !passwordResult.ok) {
+    alert('⚠️ บันทึกข้อมูลโปรไฟล์แล้ว แต่ "รหัสผ่านยังไม่เปลี่ยนในระบบจริง"!\n\nสาเหตุ: ' + passwordResult.msg + '\n\n👉 สิ่งที่ต้องทำ: กรุณาเข้าไปที่ Supabase Dashboard > SQL Editor แล้วคัดลอกคำสั่งใน supabase.sql (หัวข้อที่ 4) ไปกด Run เพื่อเปิดใช้งานสิทธิ์การเปลี่ยนรหัสผ่าน');
+  } else if (passwordResult && passwordResult.ok) {
+    toast('✅ บันทึกข้อมูลและเปลี่ยนรหัสผ่านสำเร็จแล้ว: ' + newPassword);
+  } else {
+    toast('บันทึกการแก้ไขบัญชีผู้ใช้เรียบร้อยแล้ว');
+  }
+
   render();
+};
 };
 
 // ยืนยันการลบบัญชีผู้ใช้ (Double Confirmation)
