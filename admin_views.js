@@ -454,16 +454,16 @@ function vTechsManage() {
         </div>
 
         <!-- Desktop View Table -->
-        <div class="nusp-table-wrapper desktop-only-table" style="margin-top:16px;">
-          <table class="nusp-table">
+        <div class="nusp-table-wrapper desktop-only-table" style="margin-top:14px;">
+          <table class="nusp-table compact-table">
             <thead>
               <tr>
-                <th>ชื่อ-สกุล</th>
-                <th>บทบาท</th>
-                <th>อีเมล / บัญชี</th>
-                <th>หน่วยงาน &amp; ความเชี่ยวชาญ</th>
-                <th>งานที่รับ</th>
-                <th style="text-align:center;">การจัดการ</th>
+                <th style="white-space:nowrap;">ชื่อ-สกุล</th>
+                <th style="white-space:nowrap;">บทบาท</th>
+                <th style="white-space:nowrap;">อีเมล / บัญชี</th>
+                <th style="white-space:nowrap;">หน่วยงาน &amp; เชี่ยวชาญ</th>
+                <th style="text-align:center; white-space:nowrap;">งานที่รับ</th>
+                <th style="text-align:center; white-space:nowrap;">การจัดการ</th>
               </tr>
             </thead>
             <tbody>
@@ -475,35 +475,35 @@ function vTechsManage() {
 
                 return `
                   <tr>
-                    <td style="font-weight:700; font-size:15.5px; color:#0b2545;">
+                    <td style="font-weight:700; font-size:14.5px; color:#0b2545; white-space:nowrap;">
                       ${esc(t.name)}
                     </td>
-                    <td>
-                      <span class="badge" style="font-weight:700; font-size:12.5px; ${isAdmin ? 'background:#fef3c7; color:#b45309; border:1px solid #fde68a;' : isReporter ? 'background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;' : 'background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;'}">
-                        ${isAdmin ? '👑 ผู้ดูแลระบบ' : isReporter ? '👤 ผู้แจ้งซ่อม' : '👨‍🔧 ช่างเทคนิค'}
+                    <td style="white-space:nowrap;">
+                      <span class="badge" style="font-weight:700; font-size:12px; padding:3px 8px; ${isAdmin ? 'background:#fef3c7; color:#b45309; border:1px solid #fde68a;' : isReporter ? 'background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;' : 'background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;'}">
+                        ${isAdmin ? '👑 ผู้ดูแล' : isReporter ? '👤 ผู้แจ้ง' : '👨‍🔧 ช่าง'}
                       </span>
                     </td>
-                    <td style="font-size:14px; font-family:monospace; color:#475569;">
-                      <div>${esc(info.email)}</div>
-                      <div style="font-size:13px; color:#0284c7; font-weight:700; margin-top:3px;"><a href="tel:${esc(info.tel.replace(/[^0-9+]/g, ''))}" style="color:#0284c7; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(info.tel)}</a></div>
+                    <td style="font-size:13px; font-family:monospace; color:#475569; line-height:1.4;">
+                      <div style="max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(info.email)}">${esc(info.email)}</div>
+                      <div style="font-size:12px; color:#0284c7; font-weight:700; margin-top:2px;"><a href="tel:${esc(info.tel.replace(/[^0-9+]/g, ''))}" style="color:#0284c7; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(info.tel)}</a></div>
                     </td>
-                    <td style="font-size:14px; color:#334155;">
+                    <td style="font-size:13px; color:#334155; line-height:1.4;">
                       <div><b>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
-                      <div style="color:#64748b; font-size:13px;">หน่วยงาน: ${esc(info.org)}</div>
-                      ${isTech && t.skill ? `<div style="color:#64748b; font-size:13px;">เชี่ยวชาญ: ${esc(t.skill)}</div>` : ''}
+                      <div style="color:#64748b; font-size:12px;">${esc(info.org)}</div>
+                      ${isTech && t.skill ? `<div style="color:#0284c7; font-size:11.5px;">🛠️ ${esc(t.skill)}</div>` : ''}
                     </td>
-                    <td style="font-weight:700; font-size:14.5px; white-space:nowrap;">
+                    <td style="font-weight:700; font-size:13.5px; white-space:nowrap; text-align:center;">
                       ${info.workDisplay}
                     </td>
                     <td style="white-space:nowrap; text-align:center;">
-                      <div style="display:inline-flex; gap:6px;">
+                      <div style="display:inline-flex; gap:4px;">
                         ${isTech ? `
-                          <button class="btn btn-primary btn-sm" style="font-size:12.5px; padding:4px 10px;" onclick="openAssignModal('${t.id}')">
+                          <button class="btn btn-primary btn-sm" style="font-size:12px; padding:4px 8px;" onclick="openAssignModal('${t.id}')">
                             มอบหมาย
                           </button>
                         ` : ''}
-                        <button class="btn btn-outline btn-sm" style="font-size:12.5px; padding:4px 12px; font-weight:700; border-radius:8px; color:#0b2545; border-color:#94a3b8; display:inline-flex; align-items:center; gap:4px;" onclick="openEditStaffModal('${t.id}')">
-                          ✏️ แก้ไขบัญชี
+                        <button class="btn btn-outline btn-sm" style="font-size:12px; padding:4px 10px; font-weight:700; border-radius:6px; color:#0b2545; border-color:#94a3b8; display:inline-flex; align-items:center; gap:3px;" onclick="openEditStaffModal('${t.id}')">
+                          ✏️ แก้ไข
                         </button>
                       </div>
                     </td>
@@ -570,36 +570,38 @@ function vTechsManage() {
         </div>
       </div>
 
-      <!-- Right (1/3): Summary & Performance -->
-      <div style="display:flex; flex-direction:column; gap:16px;">
-        <div class="chart-card">
-          <div class="chart-header" style="font-size:17px;">สรุปผู้ใช้งานในระบบ</div>
-          <div style="padding:16px 8px; font-size:15px; display:flex; flex-direction:column; gap:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
-              <span class="mut">ผู้ใช้งานทั้งหมด:</span>
-              <b style="color:var(--primary); font-size:17px; white-space:nowrap; flex-shrink:0;">${staffList.length} ท่าน</b>
+      <!-- Right Column: Slim Compact Summary & Performance (230px) -->
+      <div style="display:flex; flex-direction:column; gap:12px; width:100%;">
+        <div class="content-card" style="padding:14px; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div style="font-size:14.5px; font-weight:800; color:#0b2545; margin-bottom:10px; display:flex; align-items:center; gap:6px; border-bottom:1px solid #f1f5f9; padding-bottom:8px;">
+            <span>👥</span> สรุปผู้ใช้งาน (${staffList.length})
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#64748b;">ผู้ใช้ทั้งหมด:</span>
+              <b style="color:var(--primary); font-size:14px;">${staffList.length} ท่าน</b>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
-              <span class="mut">ผู้แจ้งซ่อม (Reporter):</span>
-              <b style="color:#0284c7; font-size:17px; white-space:nowrap; flex-shrink:0;">${allReporters.length} ท่าน</b>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#64748b;">👤 ผู้แจ้งซ่อม:</span>
+              <b style="color:#0284c7; font-size:14px;">${allReporters.length} ท่าน</b>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
-              <span class="mut">ช่างซ่อมบำรุง (Tech):</span>
-              <b style="color:#ea580c; font-size:17px; white-space:nowrap; flex-shrink:0;">${allTechs.length} ท่าน</b>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#64748b;">👨‍🔧 ช่างซ่อม:</span>
+              <b style="color:#ea580c; font-size:14px;">${allTechs.length} ท่าน</b>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
-              <span class="mut">ผู้ดูแลระบบ (Admin):</span>
-              <b style="color:#b45309; font-size:17px; white-space:nowrap; flex-shrink:0;">${allAdmins.length} ท่าน</b>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="color:#64748b;">👑 แอดมิน:</span>
+              <b style="color:#b45309; font-size:14px;">${allAdmins.length} ท่าน</b>
             </div>
           </div>
         </div>
 
-        <div style="background:var(--success-bg); border:1px solid #a7f3d0; border-radius:var(--radius-lg); padding:20px; display:flex; align-items:center; gap:16px;">
-          <div style="font-size:32px;">✅</div>
-          <div>
-            <div style="font-size:14px; color:#065f46; font-weight:700;">อัตราการแก้ไขสำเร็จรวม</div>
-            <div style="font-size:26px; font-weight:800; color:#047857;">${fixRate}</div>
-            <div style="font-size:13px; color:#065f46;">(เสร็จ ${completedJobs} จาก ${totalJobs} งาน)</div>
+        <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px; box-shadow:0 1px 4px rgba(0,0,0,0.03);">
+          <div style="font-size:24px; flex-shrink:0;">✅</div>
+          <div style="min-width:0;">
+            <div style="font-size:12px; color:#065f46; font-weight:700;">อัตราแก้ไขสำเร็จรวม</div>
+            <div style="font-size:19px; font-weight:800; color:#047857; line-height:1.2;">${fixRate}</div>
+            <div style="font-size:11.5px; color:#047857; white-space:nowrap;">(เสร็จ ${completedJobs} จาก ${totalJobs} งาน)</div>
           </div>
         </div>
       </div>
