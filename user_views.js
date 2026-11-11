@@ -49,6 +49,8 @@ let newReportDraft = {
 };
 
 window.resetReportDraft = function() {
+  selectedFilesList = [];
+  window.selectedFilesList = selectedFilesList;
   newReportDraft = {
     cat: 'ซ่อมแซม',
     org: '',
@@ -451,14 +453,25 @@ function vReport() {
             </div>
 
             <div class="form-group full-width">
-              <label>แนบรูปภาพ (ถ้ามี)</label>
-              <div class="upload-dropzone" onclick="document.getElementById('report_files').click()">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <label style="margin:0;">แนบรูปภาพ (ถ้ามี)</label>
+                <span id="file-count-badge" style="font-size:13px; font-weight:700; color:${selectedFilesList.length >= 4 ? '#ef4444' : '#ea580c'};">
+                  แนบแล้ว (${selectedFilesList.length}/4 รูป)
+                </span>
+              </div>
+              <div class="upload-dropzone" 
+                   onclick="document.getElementById('report_files').click()"
+                   ondragover="event.preventDefault(); this.style.borderColor='var(--primary)';"
+                   ondragleave="this.style.borderColor='';"
+                   ondrop="handleFileDrop(event)">
                 <span class="upload-icon">🖼️</span>
                 <p>ลากไฟล์มาวางที่นี่ หรือ <span style="color:var(--primary);">คลิกเพื่อเลือกไฟล์</span></p>
-                <span>รองรับไฟล์ JPG, PNG ขนาดไม่เกิน 5 MB</span>
+                <span>รองรับไฟล์ JPG, PNG ขนาดไม่เกิน 5 MB (สูงสุด 4 รูป)</span>
                 <input type="file" id="report_files" name="pics" accept="image/*" multiple style="display:none;" onchange="handleFileSelect(this)">
               </div>
-              <div id="file-previews" style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;"></div>
+              <div id="file-previews" style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+                ${renderReportFilePreviewsHtml()}
+              </div>
             </div>
           </div>
 
@@ -516,12 +529,25 @@ function vReport() {
               <span>${esc(me?.name || 'ผู้แจ้ง')} (โทร: ${esc(newReportDraft.tel || '-')}${newReportDraft.tel_internal ? ' ภายใน: ' + esc(newReportDraft.tel_internal) : ''})</span>
             </div>
 
-            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; padding-top:4px;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; ${selectedFilesList.length ? 'border-bottom:1px solid var(--border-light); padding-bottom:8px;' : 'padding-top:4px;'}">
               <span class="mut" style="font-weight:700;">ความเร่งด่วน:</span>
               <div>
                 ${newReportDraft.priority === 'emergency' ? '<span class="badge badge-urgent"><span class="badge-dot"></span> ฉุกเฉิน</span>' : newReportDraft.priority === 'urgent' ? '<span class="badge badge-pending"><span class="badge-dot"></span> เร่งด่วน</span>' : '<span class="badge badge-doing"><span class="badge-dot"></span> ปกติ</span>'}
               </div>
             </div>
+
+            ${selectedFilesList.length ? `
+              <div style="display:flex; flex-direction:column; gap:8px; padding-top:4px;">
+                <span class="mut" style="font-weight:700;">รูปภาพที่แนบ (${selectedFilesList.length}/4 รูป):</span>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                  ${selectedFilesList.map((f, idx) => `
+                    <div style="position:relative; width:65px; height:65px; border-radius:8px; overflow:hidden; border:1px solid var(--border); box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                      <img src="${URL.createObjectURL(f)}" alt="รูปที่ ${idx+1}" style="width:100%; height:100%; object-fit:cover;">
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
           </div>
         </div>
 
@@ -542,17 +568,92 @@ window.selectPriority = function(pri) {
 };
 
 let selectedFilesList = [];
-window.handleFileSelect = function(input) {
-  selectedFilesList = [...input.files];
+window.selectedFilesList = selectedFilesList;
+
+window.renderReportFilePreviewsHtml = function() {
+  if (!selectedFilesList || !selectedFilesList.length) {
+    return '';
+  }
+  return selectedFilesList.map((file, idx) => {
+    let url = '';
+    try { url = URL.createObjectURL(file); } catch(e) {}
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    return `
+      <div style="position:relative; width:76px; height:76px; border-radius:10px; overflow:hidden; border:1.5px solid #cbd5e1; box-shadow:0 2px 6px rgba(0,0,0,0.06); background:#f8fafc;" title="${esc(file.name)} (${sizeMb} MB)">
+        <img src="${url}" alt="${esc(file.name)}" style="width:100%; height:100%; object-fit:cover;">
+        <button type="button" onclick="event.stopPropagation(); removeReportFile(${idx})" style="position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; background:rgba(239,68,68,0.92); color:#fff; border:none; font-size:12px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; box-shadow:0 1px 3px rgba(0,0,0,0.3);" title="ลบรูปนี้">✕</button>
+        <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(15,23,42,0.68); color:#fff; font-size:10px; text-align:center; padding:1px 0; font-family:sans-serif;">${sizeMb}MB</div>
+      </div>
+    `;
+  }).join('');
+};
+
+window.renderReportFilePreviews = function() {
   const previewBox = document.getElementById('file-previews');
-  if (!previewBox) return;
-  previewBox.innerHTML = '';
-  selectedFilesList.forEach(file => {
-    const url = URL.createObjectURL(file);
-    previewBox.insertAdjacentHTML('beforeend', `
-      <img src="${url}" style="width:60px; height:60px; object-fit:cover; border-radius:6px; border:1px solid var(--border);">
-    `);
-  });
+  if (previewBox) {
+    previewBox.innerHTML = renderReportFilePreviewsHtml();
+  }
+  const badge = document.getElementById('file-count-badge');
+  if (badge) {
+    badge.textContent = `แนบแล้ว (${selectedFilesList.length}/4 รูป)`;
+    badge.style.color = selectedFilesList.length >= 4 ? '#ef4444' : '#ea580c';
+  }
+};
+
+window.removeReportFile = function(idx) {
+  if (idx >= 0 && idx < selectedFilesList.length) {
+    selectedFilesList.splice(idx, 1);
+    renderReportFilePreviews();
+    toast('ลบรูปภาพแล้ว');
+  }
+};
+
+window.handleFileDrop = function(e) {
+  e.preventDefault();
+  if (e.currentTarget) e.currentTarget.style.borderColor = '';
+  if (e.dataTransfer && e.dataTransfer.files) {
+    processNewReportFiles([...e.dataTransfer.files]);
+  }
+};
+
+window.handleFileSelect = function(input) {
+  if (input && input.files) {
+    processNewReportFiles([...input.files]);
+    input.value = ''; // เคลียร์ input เพื่อให้เลือกไฟล์เดิมซ้ำได้ถ้าเคยลบออกไป
+  }
+};
+
+window.processNewReportFiles = function(files) {
+  if (!files || !files.length) return;
+  
+  let addedCount = 0;
+  for (const file of files) {
+    if (!file.type || !file.type.startsWith('image/')) {
+      toast(`ไฟล์ "${file.name}" ไม่ใช่ไฟล์รูปภาพ (รองรับเฉพาะ JPG, PNG)`);
+      continue;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast(`รูป "${file.name}" มีขนาดเกิน 5 MB ไม่สามารถแนบได้`);
+      continue;
+    }
+    if (selectedFilesList.length >= 4) {
+      toast('แนบรูปภาพได้สูงสุดไม่เกิน 4 รูปเท่านั้นครับ');
+      break;
+    }
+    // ตรวจสอบรูปซ้ำ (ชื่อ, ขนาด, เวลาแก้ไข)
+    const isDup = selectedFilesList.some(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified);
+    if (isDup) {
+      continue;
+    }
+
+    selectedFilesList.push(file);
+    addedCount++;
+  }
+
+  renderReportFilePreviews();
+  if (addedCount > 0) {
+    toast(`แนบรูปภาพสำเร็จ (${selectedFilesList.length}/4 รูป)`);
+  }
 };
 
 window.handleNextStep = function(e) {
