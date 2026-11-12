@@ -85,7 +85,8 @@ function vPool() {
           const itemObj = t.items?.[0] || {};
           const title = itemObj.item || t.title || 'แจ้งซ่อม';
           const sym = itemObj.sym || t.details || t.note || 'ไม่มีรายละเอียดเพิ่มเติม';
-          const asset = itemObj.asset ? `[รหัสครุภัณฑ์: ${itemObj.asset}]` : '';
+          const assetNo = itemObj.asset || t.asset_no || t.asset || '';
+          const asset = assetNo ? `[รหัสครุภัณฑ์: ${assetNo}]` : '';
           const cat = t.types?.[0] || t.sub_type || t.cat || 'งานซ่อมบำรุง';
           const loc = formatTicketLocation(t);
           const dateStr = fmt(t.created_at) || t.date || '-';
@@ -99,6 +100,7 @@ function vPool() {
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                   <b style="font-size:17.5px; color:var(--primary); font-weight:800; cursor:pointer;" onclick="viewTaskDetail('${t.id}')">${esc(t.id)}</b>
+                  <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
                   <span class="badge ${t.cat === 'ติดตั้ง/ต่อเติม' ? 'badge-install' : 'badge-doing'}" style="font-size:13.5px;">🏷️ ${esc(cat)}</span>
                   ${t.urgent ? '<span class="badge badge-urgent"><span class="badge-dot"></span> ด่วน</span>' : '<span class="badge badge-normal"><span class="badge-dot"></span> ปกติ</span>'}
                 </div>
@@ -114,13 +116,24 @@ function vPool() {
                   <!-- Title / สิ่งที่ต้องทำ -->
                   <div style="font-size:17px; font-weight:800; color:var(--text-main); margin-bottom:8px; line-height:1.4;">
                     🛠️ สิ่งที่ต้องทำ: <span style="color:var(--text-main);">${esc(title)}</span>
-                    ${asset ? `<span style="font-size:13.5px; color:var(--text-muted); font-weight:600; margin-left:6px;">${esc(asset)}</span>` : ''}
+                    ${assetNo ? `
+                      <span style="font-size:13.5px; font-family:monospace; color:#c2410c; background:#fff7ed; padding:1px 6px; border-radius:4px; border:1px solid #fed7aa; margin-left:6px;">🏷️ ${esc(assetNo)}</span>
+                      <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋</button>
+                    ` : ''}
                   </div>
 
                   <!-- Details / รายละเอียดอาการปัญหา -->
                   <div style="background:var(--bg-subtle); border-radius:10px; padding:12px 14px; margin-bottom:12px; border:1px solid #e2e8f0;">
                     <div style="font-size:13.5px; font-weight:700; color:var(--primary); margin-bottom:4px;">📋 รายละเอียดงาน / อาการเสีย:</div>
                     <div style="font-size:15.5px; color:var(--text-main); line-height:1.6; font-weight:500;">${esc(sym)}</div>
+                    ${(() => {
+                      const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
+                      return tRemark ? `
+                        <div style="font-size:13.5px; margin-top:8px; padding:6px 10px; border-radius:6px; background:#f0fdf4; color:#166534; font-weight:700; border:1px solid #bbf7d0;">
+                          📌 หมายเหตุเพิ่มเติม: ${esc(tRemark)}
+                        </div>
+                      ` : '';
+                    })()}
                   </div>
 
                   <!-- Meta Info: Location & Reporter -->
@@ -232,17 +245,21 @@ function vTaskDetail() {
           <!-- Right: Ticket Information (ข้อมูลที่ผู้แจ้งกรอกทั้งหมด หัวข้อเป็นตัวหนา) -->
           <div style="display:flex; flex-direction:column; gap:12px; font-size:15.5px; line-height:1.6;">
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
-              <span style="font-size:18px; color:#0b2545;"><b>เลขที่งาน :</b> <span style="color:#ea580c; font-weight:800;">${esc(t.id)}</span></span>
+              <span style="font-size:18px; color:#0b2545;">
+                <b>เลขที่งาน :</b> <span style="color:#ea580c; font-weight:800;">${esc(t.id)}</span>
+                <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋 คัดลอก</button>
+              </span>
               ${t.urgent ? '<span class="badge badge-urgent"><span class="badge-dot"></span> ❗ ด่วน</span>' : '<span class="badge badge-normal">ความเร่งด่วน: ปกติ</span>'}
               <span class="badge badge-doing" style="margin-left:auto; font-size:14px; font-weight:700;">${esc(t.cat || 'ซ่อมแซม')}</span>
             </div>
 
             <div><b>หัวข้อ / ชนิดอุปกรณ์ :</b> <span style="font-weight:700; font-size:16.5px; color:var(--primary);">${esc(title)}</span></div>
             <div><b>ประเภทงาน :</b> <span>${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</span></div>
-            <div>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
               <b>หมายเลขครุภัณฑ์ :</b> 
               ${assetNo ? `
                 <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</b>
+                <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋 คัดลอก</button>
               ` : `
                 <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
               `}
@@ -564,6 +581,7 @@ function vTechDone() {
               <div class="done-compact-header" onclick="toggleTechDoneDetail('${t.id}')">
                 <div class="done-compact-left">
                   <span class="done-compact-id">${esc(t.id)}</span>
+                  <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
                   <span class="badge badge-done" style="font-size:12px; padding:3px 8px;">✓ เสร็จสิ้น</span>
                   <span class="done-compact-title">${esc(titleText)}</span>
                   <span class="done-compact-loc">📍 ${esc(formatTicketLocation(t))}</span>
@@ -602,10 +620,11 @@ function vTechDone() {
                           <div><b>🏢 อาคาร / สถานที่:</b> ${esc(formatTicketLocation(t))}</div>
                           <div><b>⚙️ ประเภทงาน:</b> ${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</div>
                           <div><b>🏷️ ชนิดอุปกรณ์:</b> <span style="font-weight:700; color:#0b2545;">${esc(equipType)}</span></div>
-                          <div>
+                          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                             <b>🏷️ หมายเลขครุภัณฑ์:</b> 
                             ${assetNo ? `
                               <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">${esc(assetNo)}</b>
+                              <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋 คัดลอก</button>
                             ` : `
                               <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
                             `}
@@ -1023,8 +1042,9 @@ window.openAct = function (id) {
       <!-- การ์ดข้อมูลส่วนบน (Header Summary Card) -->
       <div class="act-summary-card">
         <div class="act-summary-top">
-          <div style="display:flex; align-items:center; gap:10px;">
+          <div style="display:flex; align-items:center; gap:8px;">
             <span class="act-ticket-id">${esc(t.id)}</span>
+            <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
             ${t.urgent ? `<span class="act-badge-urgent">❗ เร่งด่วน</span>` : ''}
           </div>
           <div style="display:flex; align-items:center; gap:12px;">

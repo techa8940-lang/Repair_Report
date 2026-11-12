@@ -1230,15 +1230,18 @@ window.openAssignModal = function(techId) {
   $('#dlg').innerHTML = `
     <h3 style="font-size:17px; margin-bottom:14px;">📋 เลือกงานเพื่อมอบหมายให้ช่าง</h3>
     <div style="max-height:240px; overflow-y:auto; margin-bottom:14px;">
-      ${pendingTickets.map(t => `
+      ${pendingTickets.map(t => {
+        const aNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
+        return `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border);">
           <div>
-            <b>${esc(t.id)}</b> - ${esc(t.items?.[0]?.item || 'แจ้งซ่อม')}
-            <div class="mut" style="font-size:14.5px;">อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')}</div>
+            <b>${esc(t.id)}</b> <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button> - ${esc(t.items?.[0]?.item || 'แจ้งซ่อม')}
+            ${aNo ? `<span style="font-size:12px; font-family:monospace; color:#c2410c; background:#fff7ed; padding:1px 5px; border-radius:4px; border:1px solid #fed7aa; margin-left:4px;">🏷️ ${esc(aNo)}</span> <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(aNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋</button>` : ''}
+            <div class="mut" style="font-size:13.5px; margin-top:2px;">📍 ${esc(formatTicketLocation(t))}</div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="confirmAssignDirect('${t.id}', '${techId}')">มอบหมายงานนี้</button>
         </div>
-      `).join('')}
+      `;}).join('')}
     </div>
     <div style="text-align:right;">
       <button class="btn btn-outline" onclick="$('#dlg').close()">ปิด</button>
@@ -1468,12 +1471,16 @@ function vAll() {
               <div class="done-compact-header" style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; flex-wrap:wrap; gap:12px;">
                 <div class="done-compact-left" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                   <span class="done-compact-id" style="font-weight:800; font-family:monospace; color:#ea580c; font-size:15px;">${esc(t.id)}</span>
+                  <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
                   ${t.urgent ? '<span class="badge badge-urgent" style="font-size:11.5px; padding:2px 8px;">❗ ด่วน</span>' : ''}
                   <span class="badge" style="background:${stConfig[1]}15; color:${stConfig[1]}; border:1px solid ${stConfig[1]}; font-size:12.5px; font-weight:700;">
                     ${stConfig[0]}
                   </span>
                   <span class="done-compact-title" style="font-weight:700; color:#0b2545; font-size:15.5px;">${esc(titleText)}</span>
-                  ${assetNo ? `<span style="font-size:12.5px; font-family:monospace; color:#c2410c; background:#fff7ed; padding:1px 6px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</span>` : ''}
+                  ${assetNo ? `
+                    <span style="font-size:12.5px; font-family:monospace; color:#c2410c; background:#fff7ed; padding:1px 6px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</span>
+                    <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋</button>
+                  ` : ''}
                   <span class="done-compact-loc" style="font-size:13.5px; color:#64748b;">📍 ${esc(formatTicketLocation(t))}</span>
                   <span style="font-size:13px; font-weight:700; color:${t.tech_name ? '#0369a1' : '#64748b'}; background:${t.tech_name ? '#f0f9ff' : '#f8fafc'}; border:1px solid ${t.tech_name ? '#bae6fd' : '#cbd5e1'}; padding:2px 8px; border-radius:6px; white-space:nowrap;">
                     👨‍🔧 ${t.tech_name ? `ช่าง: ${esc(t.tech_name)}` : '<span style="color:#94a3b8;">ยังไม่ได้มอบหมาย</span>'}
@@ -1549,6 +1556,7 @@ window.openAdminTicketModal = function(id) {
         <div>
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
             <span style="font-size:20px; font-weight:800; color:#ea580c; font-family:monospace;">${esc(t.id)}</span>
+            <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋 คัดลอก</button>
             ${t.urgent ? '<span class="badge badge-urgent" style="font-size:12px;">❗ ด่วน</span>' : '<span class="badge badge-normal" style="font-size:12px;">ปกติ</span>'}
             <span class="badge" style="background:${stConfig[1]}15; color:${stConfig[1]}; border:1px solid ${stConfig[1]}; font-size:12.5px; font-weight:700;">
               ${stConfig[0]}
@@ -1583,6 +1591,7 @@ window.openAdminTicketModal = function(id) {
               <b>หมายเลขครุภัณฑ์ :</b>
               ${assetNo ? `
                 <b style="font-family:monospace; color:#c2410c; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</b>
+                <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋 คัดลอก</button>
               ` : `
                 <span style="color:#94a3b8;">- ไม่ได้ระบุ -</span>
               `}
@@ -2491,8 +2500,9 @@ function vAssetCheck() {
           <div style="background:#ffffff; border:1.5px solid #fed7aa; border-radius:14px; padding:20px; margin-bottom:20px; box-shadow:0 4px 12px rgba(234,88,12,0.06);">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; border-bottom:1px solid #fed7aa; padding-bottom:14px; margin-bottom:16px;">
               <div>
-                <span class="badge" style="background:#fff7ed; color:#ea580c; border:1.5px solid #fed7aa; font-family:monospace; font-size:16px; font-weight:800; padding:4px 12px;">
+                <span class="badge" style="background:#fff7ed; color:#ea580c; border:1.5px solid #fed7aa; font-family:monospace; font-size:16px; font-weight:800; padding:4px 12px; display:inline-flex; align-items:center; gap:8px;">
                   🏷️ หมายเลขครุภัณฑ์: ${esc(assetSummary.code)}
+                  <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetSummary.code)}', event)" title="คัดลอกเลขครุภัณฑ์">📋 คัดลอก</button>
                 </span>
                 <h3 style="font-size:20px; font-weight:800; color:#0b2545; margin:10px 0 4px 0;">
                   ${esc(assetSummary.name)}
@@ -2549,7 +2559,10 @@ function vAssetCheck() {
                   ${assetSummary.materials.length ? assetSummary.materials.map(u => `
                     <tr>
                       <td data-label="วันที่เบิก" style="color:var(--text-muted); font-size:14px; white-space:nowrap;">${fmt(u.created_at)}</td>
-                      <td data-label="ใบงานที่เบิก" style="font-weight:700; color:var(--primary); white-space:nowrap;">${esc(u.ticket_id)}</td>
+                      <td data-label="ใบงานที่เบิก" style="font-weight:700; color:var(--primary); white-space:nowrap;">
+                        <span>${esc(u.ticket_id)}</span>
+                        <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(u.ticket_id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
+                      </td>
                       <td data-label="ชื่อวัสดุ" style="font-weight:700; color:#0f172a;">${esc(u.name)}</td>
                       <td data-label="จำนวน" style="font-weight:800; color:#0284c7; white-space:nowrap;">${u.qty} ${esc(u.unit || 'ชิ้น')}</td>
                       <td data-label="ช่างผู้เบิก" style="font-weight:600; white-space:nowrap;">${esc(u.tech_name || '-')}</td>
@@ -2584,6 +2597,7 @@ function vAssetCheck() {
                           ${searchResults.length - idx}
                         </span>
                         <span style="font-weight:800; color:#ea580c; font-size:16px;">ใบแจ้งซ่อม: ${esc(t.id)}</span>
+                        <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
                         ${(typeof ST !== 'undefined' && ST[t.status]) ? `
                           <span class="badge" style="background:#fff7ed; color:${ST[t.status][1]}; border:1px solid ${ST[t.status][1]}; font-size:12px;">
                             ${ST[t.status][0]}
@@ -2672,6 +2686,7 @@ function vAssetCheck() {
                 <tr>
                   <td data-label="หมายเลขครุภัณฑ์" style="font-weight:800; color:var(--primary); font-family:monospace; font-size:15px; white-space:nowrap;">
                     🏷️ ${esc(a.code)}
+                    <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(a.code)}', event)" title="คัดลอกเลขครุภัณฑ์">📋</button>
                   </td>
                   <td data-label="ชื่อ / ชนิด" style="font-weight:700; color:#0f172a; font-size:15px;">
                     ${esc(a.name)}

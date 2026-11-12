@@ -63,11 +63,27 @@ window.cleanBuildingName = function(bld) {
 window.formatTicketLocation = function(t) {
   if (!t) return '-';
   const cleanBld = window.cleanBuildingName(t.bld);
-  const bldStr = t.bld_other ? `อาคาร ${cleanBld} (${t.bld_other})` : (cleanBld !== '-' ? `อาคาร ${cleanBld}` : '');
-  const flrStr = t.flr ? `ชั้น ${t.flr}` : '';
-  const roomStr = t.room ? `ห้อง ${t.room}` : '';
+  let bldStr = '';
+  if (cleanBld === 'อื่นๆ' || cleanBld === '-') {
+    if (t.bld_other && String(t.bld_other).trim()) {
+      const cleanOther = window.cleanBuildingName(t.bld_other);
+      bldStr = `อาคาร ${cleanOther}`;
+    } else if (cleanBld === 'อื่นๆ') {
+      bldStr = 'อาคาร อื่นๆ';
+    }
+  } else {
+    bldStr = t.bld_other ? `อาคาร ${cleanBld} (${t.bld_other})` : `อาคาร ${cleanBld}`;
+  }
+
+  const cleanFlr = String(t.flr || '').trim();
+  const flrStr = (cleanFlr && cleanFlr !== '-') ? `ชั้น ${cleanFlr}` : '';
+
+  const cleanRoom = String(t.room || '').trim();
+  const roomStr = (cleanRoom && cleanRoom !== '-') ? `ห้อง ${cleanRoom}` : '';
+
   const area = (typeof getTicketArea === 'function') ? getTicketArea(t) : (t.area || t.items?.[0]?.area || '');
-  const areaStr = area ? `(บริเวณ: ${area})` : '';
+  const cleanArea = String(area || '').trim();
+  const areaStr = (cleanArea && cleanArea !== '-') ? `(บริเวณ: ${cleanArea})` : '';
 
   const parts = [bldStr, flrStr, roomStr, areaStr].filter(Boolean);
   return parts.join(' ') || '-';
@@ -280,11 +296,65 @@ window.setStatM = function(m) { statM = m; render(); };
 window.setFil = function(f) { fil = f; render(); };
 window.setFT = function(f) { fT = f; render(); };
 
-window.copyNo = function(no, e) {
-  if (e) e.stopPropagation();
-  navigator.clipboard.writeText(no);
-  toast('คัดลอก ' + no + ' แล้ว!');
+window.copyText = function(val, label = '', e) {
+  if (e) {
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+  }
+  let str = '';
+  if (typeof val === 'string' || typeof val === 'number') {
+    str = String(val).trim();
+  } else if (val && val.getAttribute) {
+    str = String(val.getAttribute('data-copy') || val.dataset?.copy || val.innerText || '').trim();
+  }
+  if (!str) return;
+  const desc = label ? `${label} ${str}` : str;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(str).then(() => {
+      toast('คัดลอก ' + desc + ' แล้ว 📋');
+    }).catch(() => {
+      fallbackCopyText(str, desc);
+    });
+  } else {
+    fallbackCopyText(str, desc);
+  }
 };
+
+function fallbackCopyText(str, desc) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = str;
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '-9999px';
+    ta.style.opacity = '0';
+    ta.setAttribute('readonly', '');
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) {
+      toast('คัดลอก ' + desc + ' แล้ว 📋');
+    } else {
+      toast('คัดลอก: ' + str);
+    }
+  } catch (err) {
+    toast('คัดลอก: ' + str);
+  }
+}
+
+window.copyNo = function(no, e) {
+  window.copyText(no, 'เลขที่ใบแจ้งซ่อม', e);
+};
+
+window.copyAsset = function(asset, e) {
+  window.copyText(asset, 'หมายเลขครุภัณฑ์', e);
+};
+
+var copyNo = window.copyNo;
+var copyAsset = window.copyAsset;
+var copyText = window.copyText;
 
 // ==========================================================================
 // Ticket Real-time Sync & History Loader
@@ -1451,11 +1521,14 @@ const card = (t, x = '') => {
         <!-- 3-Box Top Stats Row -->
         <div class="ticket-stats-grid">
           <!-- Box 1: Ticket ID -->
-          <div class="ticket-stat-box ticket-stat-box-id" onclick="copyNo('${t.id}', event)" title="คลิกเพื่อคัดลอกเลขใบแจ้งซ่อม">
+          <div class="ticket-stat-box ticket-stat-box-id" onclick="copyNo('${esc(t.id)}', event)" title="คลิกเพื่อคัดลอกเลขใบแจ้งซ่อม">
             <div class="ticket-stat-icon-wrap">📄</div>
             <div class="ticket-stat-texts">
               <div class="ticket-stat-label">เลขที่ใบแจ้งซ่อม</div>
-              <div class="ticket-stat-val-id">${esc(t.id)}</div>
+              <div class="ticket-stat-val-id" style="display:flex; align-items:center; gap:6px;">
+                <span>${esc(t.id)}</span>
+                <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋 คัดลอก</button>
+              </div>
             </div>
           </div>
 
@@ -1502,7 +1575,13 @@ const card = (t, x = '') => {
                 <div style="font-size:13.5px; color:#64748b;">หมวด: ${esc((t.types || []).join(', ') || t.sub_type || t.cat || 'ทั่วไป')}</div>
                 <div style="margin-top:4px;">
                   <span style="color:#ea580c; font-weight:700; font-size:13.5px;">🏷️ รหัสครุภัณฑ์:</span>
-                  ${(t.items?.[0]?.asset || t.asset_no || t.asset) ? `<b style="font-family:monospace; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa; color:#9a3412; font-size:14px;">${esc(t.items?.[0]?.asset || t.asset_no || t.asset)}</b>` : '<span style="color:#94a3b8; font-size:13px;">ไม่ได้ระบุ</span>'}
+                  ${(() => {
+                    const aNo = t.items?.[0]?.asset || t.asset_no || t.asset || '';
+                    return aNo ? `
+                      <b style="font-family:monospace; background:#fff7ed; padding:2px 8px; border-radius:4px; border:1px solid #fed7aa; color:#9a3412; font-size:14px;">${esc(aNo)}</b>
+                      <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(aNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋 คัดลอก</button>
+                    ` : '<span style="color:#94a3b8; font-size:13px;">ไม่ได้ระบุ</span>';
+                  })()}
                 </div>
               </div>
             </div>

@@ -222,7 +222,10 @@ function vHome() {
                 
                 return `
                   <tr onclick="quickTrack('${t.no}', '${t.email || ''}')" style="cursor:pointer;" title="คลิกเพื่อดูรายละเอียด">
-                    <td style="font-weight:800; color:var(--primary); font-size:15px; white-space:nowrap;">${esc(t.no)}</td>
+                    <td style="font-weight:800; color:var(--primary); font-size:15px; white-space:nowrap;">
+                      <span>${esc(t.no)}</span>
+                      <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.no)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
+                    </td>
                     <td style="font-weight:600; font-size:15px;">${esc(t.title || t.no)}</td>
                     <td style="font-size:14px;">${esc(t.type || 'ทั่วไป')}</td>
                     <td>${badge}</td>
@@ -257,7 +260,10 @@ function vHome() {
             return `
               <div onclick="quickTrack('${t.no}', '${t.email || ''}')" style="background:var(--bg-subtle); border:1.5px solid var(--border); border-radius:var(--radius-md); padding:14px; cursor:pointer; display:flex; flex-direction:column; gap:8px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                  <b style="color:var(--primary); font-size:16px;">${esc(t.no)}</b>
+                  <div style="display:flex; align-items:center;">
+                    <b style="color:var(--primary); font-size:16px;">${esc(t.no)}</b>
+                    <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.no)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
+                  </div>
                   ${badge}
                 </div>
                 <div style="font-weight:700; font-size:16px; color:var(--text-main); line-height:1.4;">
@@ -308,7 +314,7 @@ function vReport() {
         <div style="background: var(--bg-subtle); border: 1px dashed var(--border); border-radius: var(--radius-md); padding: 16px; max-width: 400px; margin: 0 auto 24px;">
           <div style="font-size: 15px; color: var(--text-muted); margin-bottom: 4px; font-weight:600;">เลขที่ใบแจ้งซ่อมของคุณ</div>
           <div style="font-size: 26px; font-weight: 800; color: var(--primary); letter-spacing: 0.5px;">${esc(lastNo || '-')}</div>
-          ${lastNo ? `<button type="button" class="btn btn-outline btn-sm" style="margin-top: 10px; font-size:14px; font-weight:700;" onclick="copyNo('${lastNo}', event)">📋 คัดลอกเลขที่ใบแจ้งซ่อม</button>` : ''}
+          ${lastNo ? `<button type="button" class="btn btn-outline btn-sm" style="margin-top: 10px; font-size:14px; font-weight:700;" onclick="copyNo('${esc(lastNo)}', event)">📋 คัดลอกเลขที่ใบแจ้งซ่อม</button>` : ''}
         </div>
 
         <div class="row" style="justify-content: center; gap: 10px;">
@@ -377,7 +383,7 @@ function vReport() {
                 </div>
               </div>
 
-              <div class="form-group ${newReportDraft.bld === 'อื่นๆ' ? '' : ''}">
+              <div class="form-group">
                 <label>อาคาร <span class="req">*</span></label>
                 <select class="form-control" name="bld" required onchange="setReportBld(this.value)">
                   <option value="อาคาร A" ${newReportDraft.bld === 'อาคาร A' ? 'selected' : ''}>อาคาร A</option>
@@ -529,9 +535,12 @@ function vReport() {
             ` : ''}
 
             ${newReportDraft.asset_no ? `
-              <div style="display:flex; flex-wrap:wrap; justify-content:space-between; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
+              <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
                 <span class="mut" style="font-weight:700;">หมายเลขครุภัณฑ์:</span>
-                <span>${esc(newReportDraft.asset_no)}</span>
+                <span>
+                  <b style="font-family:monospace; color:#9a3412;">${esc(newReportDraft.asset_no)}</b>
+                  <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(newReportDraft.asset_no)}', event)" title="คัดลอกเลขครุภัณฑ์">📋 คัดลอก</button>
+                </span>
               </div>
             ` : ''}
 
@@ -715,7 +724,7 @@ window.handleNextStep = function(e) {
 };
 
 window.confirmSubmitReport = async function(e) {
-  const btn = e.target;
+  const btn = e?.target?.closest ? (e.target.closest('button') || e.target) : (e?.target || {});
   btn.disabled = true;
   toast('กำลังส่งเรื่องแจ้งซ่อม...');
 
@@ -789,6 +798,8 @@ window.confirmSubmitReport = async function(e) {
       details: newReportDraft.details,
       asset_no: newReportDraft.asset_no || '',
       type: chosenType,
+      bld: chosenBld,
+      flr: newReportDraft.flr || '1',
       location: `${chosenBld} ชั้น ${newReportDraft.flr}`,
       room: newReportDraft.room || '',
       area: newReportDraft.area?.trim() || '',
@@ -1037,7 +1048,10 @@ function vHistory() {
 
               return `
                 <tr>
-                  <td data-label="เลขที่ใบแจ้งซ่อม" style="font-weight:700; color:var(--primary); font-size:15px; white-space:nowrap;">${esc(t.no)}</td>
+                  <td data-label="เลขที่ใบแจ้งซ่อม" style="font-weight:700; color:var(--primary); font-size:15px; white-space:nowrap;">
+                    <span>${esc(t.no)}</span>
+                    <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.no)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋</button>
+                  </td>
                   <td data-label="หัวข้อ"><div style="text-align:right;">
                     <div style="font-weight:700; color:#0b2545; font-size:15px;">${esc(equipType)}</div>
                     <div style="font-size:12.5px; color:#64748b;">หมวด: ${esc(t.type || t.cat || 'ทั่วไป')}</div>
@@ -1045,6 +1059,7 @@ function vHistory() {
                   <td data-label="เลขครุภัณฑ์">
                     ${assetNo ? `
                       <span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fed7aa; font-family:monospace; font-size:13.5px; font-weight:700; padding:4px 8px;">🏷️ ${esc(assetNo)}</span>
+                      <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋</button>
                     ` : `
                       <span style="color:#94a3b8; font-size:13px;">- ไม่ได้ระบุ -</span>
                     `}
@@ -1306,6 +1321,7 @@ window.quickTrack = async function (no, email) {
 
   // 5. Fallback: ถ้ายังไม่มี ให้ใช้ข้อมูลจาก localItem ใน localStorage
   if (!data && localItem) {
+    const locParts = (localItem.location || '').split(/\s+ชั้น\s+/);
     data = {
       id: localItem.no,
       title: localItem.title,
@@ -1313,7 +1329,8 @@ window.quickTrack = async function (no, email) {
       desc: localItem.details || '',
       asset_no: localItem.asset_no || '',
       cat: localItem.type,
-      bld: localItem.location?.replace(/^อาคาร\s*/, '') || '',
+      bld: localItem.bld || (locParts[0] ? locParts[0].replace(/^อาคาร\s*/, '') : ''),
+      flr: localItem.flr || locParts[1] || '',
       room: localItem.room || '',
       area: localItem.area || '',
       remark: localItem.remark || '',
@@ -1359,9 +1376,10 @@ window.openReporterTicketModal = function(t) {
     <div style="background:#ffffff; color:#0f172a; font-family:'Prompt','Noto Sans Thai',sans-serif; overflow:hidden; border-radius:18px;">
       <!-- แถบหัว Pop-up -->
       <div style="background:linear-gradient(135deg, #7c2d12 0%, #c2410c 45%, #ea580c 100%); color:#ffffff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
-        <div style="display:flex; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <span style="font-size:20px;">📄</span>
           <span style="font-size:18px; font-weight:800;">รายละเอียดการแจ้งซ่อม: ${esc(t.id || t.no)}</span>
+          <button type="button" class="btn-copy-tag" style="background:rgba(255,255,255,0.2); color:#ffffff; border-color:rgba(255,255,255,0.4);" onclick="copyNo('${esc(t.id || t.no)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋 คัดลอก</button>
         </div>
         <button type="button" onclick="document.getElementById('dlg').close()" style="background:rgba(255,255,255,0.2); border:none; color:#ffffff; width:34px; height:34px; border-radius:9999px; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="ปิดหน้าต่าง">&times;</button>
       </div>
@@ -1376,7 +1394,10 @@ window.openReporterTicketModal = function(t) {
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:18px;">
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;">
             <div style="font-size:12.5px; color:#64748b; font-weight:700;">เลขที่ใบแจ้งซ่อม</div>
-            <div style="font-size:17px; font-weight:800; color:#0b2545; margin-top:2px;">${esc(t.id || t.no)}</div>
+            <div style="font-size:17px; font-weight:800; color:#0b2545; margin-top:2px; display:flex; align-items:center; gap:6px;">
+              <span>${esc(t.id || t.no)}</span>
+              <button type="button" class="btn-copy-tag" onclick="copyNo('${esc(t.id || t.no)}', event)" title="คัดลอกเลขใบแจ้งซ่อม">📋 คัดลอก</button>
+            </div>
           </div>
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;">
             <div style="font-size:12.5px; color:#64748b; font-weight:700;">วันที่แจ้ง</div>
@@ -1392,8 +1413,11 @@ window.openReporterTicketModal = function(t) {
         <div style="background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:14px 18px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
           <div>
             <div style="font-size:12.5px; color:#c2410c; font-weight:700;">🏷️ หมายเลขครุภัณฑ์ (Asset Number)</div>
-            <div style="font-size:17.5px; font-weight:800; color:#9a3412; font-family:monospace; margin-top:2px;">
-              ${assetNo ? esc(assetNo) : '<span style="color:#94a3b8; font-weight:normal; font-size:14px;">- ผู้แจ้งไม่ได้ระบุหมายเลขครุภัณฑ์ -</span>'}
+            <div style="font-size:17.5px; font-weight:800; color:#9a3412; font-family:monospace; margin-top:2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              ${assetNo ? `
+                <span>${esc(assetNo)}</span>
+                <button type="button" class="btn-copy-tag btn-copy-asset" onclick="copyAsset('${esc(assetNo)}', event)" title="คัดลอกเลขครุภัณฑ์">📋 คัดลอก</button>
+              ` : '<span style="color:#94a3b8; font-weight:normal; font-size:14px;">- ผู้แจ้งไม่ได้ระบุหมายเลขครุภัณฑ์ -</span>'}
             </div>
           </div>
           <div>
