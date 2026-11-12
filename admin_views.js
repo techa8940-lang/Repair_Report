@@ -1426,7 +1426,7 @@ function vAll() {
       <!-- ช่องค้นหารายการซ่อมด้วยเลขใบซ่อมในหน้าสรุปงานซ่อม -->
       <div style="position:relative; margin-bottom:16px;">
         <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:16px; color:#64748b;">🔍</span>
-        <input class="form-control" type="text" placeholder="ค้นหาด้วยเลขที่ใบซ่อม เช่น REP-2026-450, หัวข้อปัญหา หรือหมายเลขครุภัณฑ์..." value="${esc(adminTicketSearch)}" oninput="setAdminTicketSearch(this.value)" style="padding-left:42px; padding-right:38px; height:46px; font-size:15px; border-radius:10px; border:1.5px solid #cbd5e1; background:#ffffff;">
+        <input class="form-control" type="text" placeholder="ค้นหาด้วยเลขที่ใบซ่อม เช่น REP-2026-1045, หัวข้อปัญหา หรือหมายเลขครุภัณฑ์..." value="${esc(adminTicketSearch)}" oninput="setAdminTicketSearch(this.value)" style="padding-left:42px; padding-right:38px; height:46px; font-size:15px; border-radius:10px; border:1.5px solid #cbd5e1; background:#ffffff;">
         ${adminTicketSearch ? `
           <button type="button" onclick="resetAdminTicketSearch()" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; font-size:22px; cursor:pointer; line-height:1;" title="ล้างการค้นหา">&times;</button>
         ` : ''}

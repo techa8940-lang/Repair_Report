@@ -728,7 +728,7 @@ window.confirmSubmitReport = async function(e) {
   btn.disabled = true;
   toast('กำลังส่งเรื่องแจ้งซ่อม...');
 
-  const no = 'REP-' + new Date().getFullYear() + '-' + Math.floor(100 + Math.random() * 900);
+  const no = 'REP-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
   const cat = newReportDraft.cat || 'ซ่อมแซม';
   const chosenType = newReportDraft.sub_type === 'อื่นๆ'
     ? (newReportDraft.sub_type_other ? 'อื่นๆ: ' + newReportDraft.sub_type_other : 'อื่นๆ')
@@ -842,10 +842,10 @@ function vTrack() {
   return `
     <div class="content-card" style="max-width:700px; margin:0 auto 20px;">
       <h2 style="font-size:18px; margin-bottom:8px;">🔍 ติดตามสถานะใบแจ้งซ่อม</h2>
-      <p class="mut" style="margin-bottom:16px;">กรอกเลขที่ใบแจ้งซ่อม เช่น REP-2026-001 หรือ RP-...</p>
+      <p class="mut" style="margin-bottom:16px;">กรอกเลขที่ใบแจ้งซ่อม เช่น REP-2026-1001 หรือ RP-...</p>
       
       <form onsubmit="trackT(event)" style="display:flex; gap:8px;">
-        <input class="form-control" name="no" placeholder="เช่น REP-2026-010" required style="font-size:15px; font-weight:600;">
+        <input class="form-control" name="no" placeholder="เช่น REP-2026-1001" required style="font-size:15px; font-weight:600;">
         <button class="btn btn-primary" type="submit" style="white-space:nowrap;">ค้นหาใบงาน</button>
       </form>
     </div>
