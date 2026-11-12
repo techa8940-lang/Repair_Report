@@ -87,7 +87,7 @@ function vPool() {
           const sym = itemObj.sym || t.details || t.note || 'ไม่มีรายละเอียดเพิ่มเติม';
           const asset = itemObj.asset ? `[รหัสครุภัณฑ์: ${itemObj.asset}]` : '';
           const cat = t.types?.[0] || t.sub_type || t.cat || 'งานซ่อมบำรุง';
-          const loc = `อาคาร ${t.bld || 'A'} ชั้น ${t.flr || '1'}${t.room ? ' ห้อง/บริเวณ ' + t.room : ''}`;
+          const loc = formatTicketLocation(t);
           const dateStr = fmt(t.created_at) || t.date || '-';
           const reporter = t.name ? `${t.name} (โทร: ${t.tel || '-'})` : 'ไม่ระบุ';
           const hasPhoto = t.photos && t.photos.length > 0;
@@ -248,7 +248,7 @@ function vTaskDetail() {
               `}
             </div>
             <div>
-              <b>สถานที่ :</b> <b>อาคาร</b> ${esc(cleanBld)}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} <b>ชั้น</b> ${esc(t.flr || '-')} <b>ห้อง/บริเวณ</b> ${esc(t.room || '-')}
+              <b>สถานที่ :</b> ${esc(formatTicketLocation(t))}
             </div>
             <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span></div>
             <div><b>หน่วยงาน / สังกัด :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span></div>
@@ -260,6 +260,15 @@ function vTaskDetail() {
               <b style="display:block; margin-bottom:6px; color:#0b2545; font-size:15.5px;">รายละเอียดปัญหา:</b>
               <div style="color:#0f172a; line-height:1.6; font-size:15px; font-weight:600;">${esc(sym)}</div>
             </div>
+            ${(() => {
+              const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
+              return tRemark ? `
+                <div style="margin-top:8px; background:#f0fdf4; padding:10px 14px; border-radius:var(--radius-md); border:1px solid #bbf7d0;">
+                  <b style="display:block; margin-bottom:4px; color:#166534; font-size:14.5px;">📌 หมายเหตุเพิ่มเติม:</b>
+                  <div style="color:#14532d; font-size:14.5px; font-weight:600;">${esc(tRemark)}</div>
+                </div>
+              ` : '';
+            })()}
 
             <!-- Action Buttons at bottom of details -->
             <div class="row sp" style="margin-top:14px; border-top:1px solid var(--border); padding-top:16px; flex-wrap:wrap; gap:10px;">
@@ -557,7 +566,7 @@ function vTechDone() {
                   <span class="done-compact-id">${esc(t.id)}</span>
                   <span class="badge badge-done" style="font-size:12px; padding:3px 8px;">✓ เสร็จสิ้น</span>
                   <span class="done-compact-title">${esc(titleText)}</span>
-                  <span class="done-compact-loc">📍 อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')} (ห้อง ${esc(t.room || '-')})</span>
+                  <span class="done-compact-loc">📍 ${esc(formatTicketLocation(t))}</span>
                 </div>
                 <div class="done-compact-right">
                   <span class="done-compact-date">🕒 ${doneDateStr}</span>
@@ -590,7 +599,7 @@ function vTechDone() {
                           <div><b>📞 เบอร์โทรศัพท์:</b> <span style="font-weight:700; color:#0284c7;">${esc(rep.tel)}</span></div>
                           <div><b>✉️ อีเมลผู้แจ้ง:</b> ${esc(rep.email)}</div>
                           <div><b>📅 วันที่แจ้งซ่อม:</b> ${esc(reqDateStr)}</div>
-                          <div><b>🏢 อาคาร / สถานที่:</b> อาคาร ${esc(t.bld || '-')}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} ชั้น ${esc(t.flr || '-')} (ห้อง/บริเวณ ${esc(t.room || '-')})</div>
+                          <div><b>🏢 อาคาร / สถานที่:</b> ${esc(formatTicketLocation(t))}</div>
                           <div><b>⚙️ ประเภทงาน:</b> ${esc(t.cat || 'ซ่อมแซม')} (หมวด: ${esc(t.sub_type || (t.types || []).join(', ') || 'ทั่วไป')}${t.sub_type_other ? ` - ${esc(t.sub_type_other)}` : ''})</div>
                           <div><b>🏷️ ชนิดอุปกรณ์:</b> <span style="font-weight:700; color:#0b2545;">${esc(equipType)}</span></div>
                           <div>
@@ -610,6 +619,17 @@ function vTechDone() {
                       <b style="color:#0b2545; font-size:14.5px;">รายละเอียดอาการชำรุด / ปัญหา:</b>
                       <div style="font-weight:600; color:#0f172a; margin-top:4px; font-size:15px; line-height:1.5;">${esc(descText)}</div>
                     </div>
+
+                    <!-- หมายเหตุเพิ่มเติมจากผู้แจ้ง -->
+                    ${(() => {
+                      const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
+                      return tRemark ? `
+                        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+                          <b style="color:#166534; font-size:14.5px;">📌 หมายเหตุเพิ่มเติม:</b>
+                          <div style="font-weight:600; color:#14532d; margin-top:4px; font-size:14.5px;">${esc(tRemark)}</div>
+                        </div>
+                      ` : '';
+                    })()}
 
                     <!-- รูปภาพประกอบตอนแจ้ง -->
                     <div>
@@ -1026,8 +1046,12 @@ window.openAct = function (id) {
 
           <div class="act-info-col">
             <div class="act-info-title">หัวข้อ : ${esc(getTicketTitle(t))}</div>
-            <div>📍 <b>อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')}</b> ห้อง/บริเวณ ${esc(t.room || '-')}</div>
+            <div>📍 ${esc(formatTicketLocation(t))}</div>
             <div style="color:#475569;">📄 <b>รายละเอียด :</b> ${esc(getTicketDesc(t))}</div>
+            ${(() => {
+              const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
+              return tRemark ? `<div style="color:#166534; font-size:13.5px; margin-top:2px;">📌 <b>หมายเหตุเพิ่มเติม :</b> ${esc(tRemark)}</div>` : '';
+            })()}
           </div>
 
           <div class="act-reporter-col">

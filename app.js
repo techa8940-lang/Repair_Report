@@ -44,8 +44,41 @@ window.getTicketDesc = function(t) {
   if (t.note && String(t.note).trim()) return String(t.note).trim();
   return '-';
 };
+
+window.getTicketArea = function(t) {
+  if (!t) return '';
+  return t.area || t.items?.[0]?.area || '';
+};
+
+window.getTicketRemark = function(t) {
+  if (!t) return '';
+  return t.remark || t.items?.[0]?.remark || '';
+};
+
+window.cleanBuildingName = function(bld) {
+  if (!bld || bld === '-') return '-';
+  return String(bld).replace(/^อาคาร\s*[:：]?\s*/, '').trim() || '-';
+};
+
+window.formatTicketLocation = function(t) {
+  if (!t) return '-';
+  const cleanBld = window.cleanBuildingName(t.bld);
+  const bldStr = t.bld_other ? `อาคาร ${cleanBld} (${t.bld_other})` : (cleanBld !== '-' ? `อาคาร ${cleanBld}` : '');
+  const flrStr = t.flr ? `ชั้น ${t.flr}` : '';
+  const roomStr = t.room ? `ห้อง ${t.room}` : '';
+  const area = (typeof getTicketArea === 'function') ? getTicketArea(t) : (t.area || t.items?.[0]?.area || '');
+  const areaStr = area ? `(บริเวณ: ${area})` : '';
+
+  const parts = [bldStr, flrStr, roomStr, areaStr].filter(Boolean);
+  return parts.join(' ') || '-';
+};
+
 var getTicketTitle = window.getTicketTitle;
 var getTicketDesc = window.getTicketDesc;
+var getTicketArea = window.getTicketArea;
+var getTicketRemark = window.getTicketRemark;
+var cleanBuildingName = window.cleanBuildingName;
+var formatTicketLocation = window.formatTicketLocation;
 
 window.logh = (t, s, tag) => {
   const item = { s, at: Date.now() };
@@ -307,7 +340,9 @@ window.loadHistoryData = async function() {
             title: t.title || 'แจ้งซ่อม/บริการ',
             type: t.cat || 'ซ่อมแซม',
             location: `อาคาร ${t.bld || '-'} ชั้น ${t.flr || '-'}`,
-            room: t.room || '-',
+            room: t.room || '',
+            area: t.area || t.items?.[0]?.area || '',
+            remark: t.remark || t.items?.[0]?.remark || '',
             email: t.email,
             status: t.status,
             date: t.created_at ? new Date(t.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'
@@ -1451,7 +1486,7 @@ const card = (t, x = '') => {
             <div class="ticket-mid-content">
               <div class="ticket-mid-label">อาคาร / สถานที่</div>
               <div class="ticket-mid-val">
-                อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')} ห้อง/บริเวณ ${esc(t.room || '-')}
+                ${esc(formatTicketLocation(t))}
                 ${t.urgent ? '<span class="badge badge-urgent" style="font-size:12px; margin-left:6px;">ด่วน</span>' : ''}
               </div>
             </div>
@@ -1477,9 +1512,17 @@ const card = (t, x = '') => {
           <div class="ticket-mid-item">
             <div class="ticket-circle-icon">ℹ️</div>
             <div class="ticket-mid-content">
-              <div class="ticket-mid-label">รายละเอียดปัญหา</div>
+              <div class="ticket-mid-label">รายละเอียดปัญหา / หมายเหตุ</div>
               <div class="ticket-mid-val" style="font-size:15px; font-weight:700; line-height:1.5;">
                 ${problemText}
+                ${(() => {
+                  const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
+                  return tRemark ? `
+                    <div style="font-size:13.5px; margin-top:8px; padding:6px 10px; border-radius:6px; background:#f0fdf4; color:#166534; font-weight:700; border:1px solid #bbf7d0;">
+                      📌 หมายเหตุเพิ่มเติม: ${esc(tRemark)}
+                    </div>
+                  ` : '';
+                })()}
                 ${t.note ? `
                   <div style="font-size:13.5px; margin-top:8px; padding:6px 10px; border-radius:6px; background:${t.blocked ? '#fee2e2' : '#f1f5f9'}; color:${t.blocked ? '#b91c1c' : '#475569'}; font-weight:700;">
                     ${t.blocked ? '⚠️ ติดปัญหา: ' : '📝 หมายเหตุ: '}${esc(t.note)}

@@ -266,4 +266,9 @@ grant execute on function public.admin_reset_password(text, text, text) to anon,
 -- 5. เพิ่มคอลัมน์ asset_no ในตาราง tickets (หากยังไม่มี เพื่อความสะดวกรวดเร็วในการค้นหาและอัปเดตหมายเลขครุภัณฑ์)
 alter table if exists public.tickets add column if not exists asset_no text;
 
+-- 6. เพิ่มคอลัมน์ area (บริเวณพื้นที่) และ remark (หมายเหตุเพิ่มเติม) ในตาราง tickets
+alter table if exists public.tickets add column if not exists area text;
+alter table if exists public.tickets add column if not exists remark text;
+
+
 

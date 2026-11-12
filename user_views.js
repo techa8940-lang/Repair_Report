@@ -39,6 +39,8 @@ let newReportDraft = {
   bld_other: '',
   flr: '1',
   room: '',
+  area: '',
+  remark: '',
   sub_type: 'ระบบปรับอากาศ',
   sub_type_other: '',
   title: '',
@@ -60,6 +62,8 @@ window.resetReportDraft = function() {
     bld_other: '',
     flr: '1',
     room: '',
+    area: '',
+    remark: '',
     sub_type: 'ระบบปรับอากาศ',
     sub_type_other: '',
     title: '',
@@ -387,7 +391,7 @@ function vReport() {
               </div>
 
               <div class="form-group">
-                <label>ชั้น และ ห้อง <span class="req">*</span></label>
+                <label>ชั้น <span class="req">*</span> และ เลขห้อง (ถ้ามี)</label>
                 <div style="display:grid; grid-template-columns:1fr 1.6fr; gap:8px;">
                   <select class="form-control" name="flr" required onchange="updateDraft('flr', this.value)">
                     <option value="1" ${newReportDraft.flr === '1' ? 'selected' : ''}>ชั้น 1</option>
@@ -395,8 +399,13 @@ function vReport() {
                     <option value="3" ${newReportDraft.flr === '3' ? 'selected' : ''}>ชั้น 3</option>
                     <option value="4" ${newReportDraft.flr === '4' ? 'selected' : ''}>ชั้น 4</option>
                   </select>
-                  <input class="form-control" name="room" value="${esc(newReportDraft.room || '')}" placeholder="เลขห้อง เช่น TC 320" required oninput="updateDraft('room', this.value)">
+                  <input class="form-control" name="room" value="${esc(newReportDraft.room || '')}" placeholder="เลขห้อง เช่น TC 320 (ถ้ามี)" oninput="updateDraft('room', this.value)">
                 </div>
+              </div>
+
+              <div class="form-group full-width">
+                <label>บริเวณพื้นที่ (ถ้ามี)</label>
+                <input class="form-control" name="area" value="${esc(newReportDraft.area || '')}" placeholder="เช่น โถงทางเดิน, หน้าลิฟต์" oninput="updateDraft('area', this.value)">
               </div>
             </div>
           </div>
@@ -432,6 +441,11 @@ function vReport() {
             <div class="form-group full-width">
               <label>${newReportDraft.cat === 'ซ่อมแซม' ? 'อาการที่ชำรุด' : 'รายละเอียดการติดตั้ง / ต่อเติม'} <span class="req">*</span></label>
               <textarea class="form-control" name="details" rows="3" placeholder="อธิบายอาการชำรุด หรือรายละเอียดสิ่งที่ต้องการให้ดำเนินการ..." required oninput="updateDraft('details', this.value)">${esc(newReportDraft.details)}</textarea>
+            </div>
+
+            <div class="form-group full-width">
+              <label>หมายเหตุเพิ่มเติม (ถ้ามี)</label>
+              <textarea class="form-control" name="remark" rows="2" placeholder="ระบุเพิ่มเติม (ถ้ามี)" oninput="updateDraft('remark', this.value)">${esc(newReportDraft.remark || '')}</textarea>
             </div>
 
             <div class="form-group full-width">
@@ -507,6 +521,13 @@ function vReport() {
               <div style="background:#ffffff; border:1px solid var(--border); padding:10px 14px; border-radius:8px;">${esc(newReportDraft.details)}</div>
             </div>
 
+            ${newReportDraft.remark ? `
+              <div style="display:flex; flex-direction:column; gap:4px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
+                <span class="mut" style="font-weight:700;">หมายเหตุเพิ่มเติม:</span>
+                <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:10px 14px; border-radius:8px; font-weight:600; color:#166534;">${esc(newReportDraft.remark)}</div>
+              </div>
+            ` : ''}
+
             ${newReportDraft.asset_no ? `
               <div style="display:flex; flex-wrap:wrap; justify-content:space-between; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
                 <span class="mut" style="font-weight:700;">หมายเลขครุภัณฑ์:</span>
@@ -516,7 +537,13 @@ function vReport() {
 
             <div style="display:flex; flex-wrap:wrap; justify-content:space-between; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
               <span class="mut" style="font-weight:700;">สถานที่:</span>
-              <span style="font-weight:600;">${esc(newReportDraft.bld === 'อื่นๆ' ? (newReportDraft.bld_other ? 'อาคาร: ' + newReportDraft.bld_other : 'อื่นๆ') : newReportDraft.bld)} ชั้น ${esc(newReportDraft.flr)} ห้อง ${esc(newReportDraft.room || '-')}</span>
+              <span style="font-weight:600;">${esc(formatTicketLocation({
+                bld: newReportDraft.bld,
+                bld_other: newReportDraft.bld === 'อื่นๆ' ? newReportDraft.bld_other : null,
+                flr: newReportDraft.flr,
+                room: newReportDraft.room,
+                area: newReportDraft.area
+              }))}</span>
             </div>
 
             <div style="display:flex; flex-wrap:wrap; justify-content:space-between; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
@@ -658,11 +685,25 @@ window.processNewReportFiles = function(files) {
 
 window.handleNextStep = function(e) {
   e.preventDefault();
+  const form = e.target;
+  if (form) {
+    if (form.org) newReportDraft.org = form.org.value;
+    if (form.tel) newReportDraft.tel = form.tel.value;
+    if (form.tel_internal) newReportDraft.tel_internal = form.tel_internal.value;
+    if (form.bld) newReportDraft.bld = form.bld.value;
+    if (form.bld_other) newReportDraft.bld_other = form.bld_other.value;
+    if (form.flr) newReportDraft.flr = form.flr.value;
+    if (form.room) newReportDraft.room = form.room.value;
+    if (form.area) newReportDraft.area = form.area.value;
+    if (form.sub_type) newReportDraft.sub_type = form.sub_type.value;
+    if (form.sub_type_other) newReportDraft.sub_type_other = form.sub_type_other.value;
+    if (form.title) newReportDraft.title = form.title.value;
+    if (form.asset_no) newReportDraft.asset_no = form.asset_no.value;
+    if (form.details) newReportDraft.details = form.details.value;
+    if (form.remark) newReportDraft.remark = form.remark.value;
+  }
   if (!newReportDraft.title || !newReportDraft.details) {
     return toast('กรุณากรอกรายการและรายละเอียดปัญหาให้ครบถ้วน');
-  }
-  if (!newReportDraft.room) {
-    return toast('กรุณาระบุเลขห้องที่ต้องการให้เข้าดำเนินการ');
   }
   if (newReportDraft.bld === 'อื่นๆ' && !newReportDraft.bld_other.trim()) {
     return toast('กรุณาระบุชื่ออาคาร');
@@ -712,20 +753,32 @@ window.confirmSubmitReport = async function(e) {
       bld_other: newReportDraft.bld === 'อื่นๆ' ? newReportDraft.bld_other : null,
       flr: newReportDraft.flr || '1',
       room: newReportDraft.room || '',
+      area: newReportDraft.area?.trim() || null,
+      remark: newReportDraft.remark?.trim() || null,
       types: [chosenType],
       sub_type: chosenType,
       sub_type_other: newReportDraft.sub_type === 'อื่นๆ' ? newReportDraft.sub_type_other : null,
       items: [{
         item: newReportDraft.title,
         sym: newReportDraft.details,
-        asset: newReportDraft.asset_no || ''
+        asset: newReportDraft.asset_no || '',
+        area: newReportDraft.area?.trim() || '',
+        remark: newReportDraft.remark?.trim() || ''
       }],
       urgent: newReportDraft.priority !== 'normal',
       photos: photos,
       history: [{ s: 'accepted', at: Date.now() }]
     };
 
-    const { error } = await sb.from('tickets').insert(payload);
+    let { error } = await sb.from('tickets').insert(payload);
+    if (error && (error.message?.includes('area') || error.message?.includes('remark') || error.code === '42703')) {
+      console.warn('Direct area/remark insert failed, fallback without root columns:', error);
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.area;
+      delete fallbackPayload.remark;
+      const res2 = await sb.from('tickets').insert(fallbackPayload);
+      error = res2.error;
+    }
     if (error && !CONFIG.DEV) throw error;
 
     // Save to localStorage myT
@@ -733,9 +786,13 @@ window.confirmSubmitReport = async function(e) {
     myT.unshift({
       no: no,
       title: newReportDraft.title,
+      details: newReportDraft.details,
+      asset_no: newReportDraft.asset_no || '',
       type: chosenType,
-      location: `อาคาร ${newReportDraft.bld} ชั้น ${newReportDraft.flr}`,
-      room: newReportDraft.room,
+      location: `${chosenBld} ชั้น ${newReportDraft.flr}`,
+      room: newReportDraft.room || '',
+      area: newReportDraft.area?.trim() || '',
+      remark: newReportDraft.remark?.trim() || '',
       email: payload.email,
       status: 'accepted',
       date: new Date().toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric' })
@@ -1252,9 +1309,14 @@ window.quickTrack = async function (no, email) {
     data = {
       id: localItem.no,
       title: localItem.title,
+      details: localItem.details || '',
+      desc: localItem.details || '',
+      asset_no: localItem.asset_no || '',
       cat: localItem.type,
       bld: localItem.location?.replace(/^อาคาร\s*/, '') || '',
       room: localItem.room || '',
+      area: localItem.area || '',
+      remark: localItem.remark || '',
       status: localItem.status || 'accepted',
       created_at: localItem.date,
       email: localItem.email
@@ -1361,7 +1423,7 @@ window.openReporterTicketModal = function(t) {
               <b>อีเมล:</b> <span style="color:#334155;">${esc(rep.email)}</span>
             </div>
             <div>
-              <b>สถานที่:</b> อาคาร ${esc(t.bld || '-')} ชั้น ${esc(t.flr || '-')} (ห้อง/บริเวณ ${esc(t.room || '-')})
+              <b>สถานที่:</b> ${esc(formatTicketLocation(t))}
               ${t.urgent ? '<span class="badge badge-urgent" style="font-size:12px; margin-left:6px;">ด่วน</span>' : ''}
             </div>
             <div>
@@ -1371,6 +1433,14 @@ window.openReporterTicketModal = function(t) {
               <b style="color:#0b2545;">รายละเอียดอาการ / ปัญหา:</b>
               <div style="color:#1e293b; font-weight:600; margin-top:4px;">${esc(descText)}</div>
             </div>
+            ${(() => {
+              const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
+              return tRemark ? `
+                <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px; color:#166534; font-size:14.5px; margin-top:4px;">
+                  <b>📌 หมายเหตุเพิ่มเติม:</b> ${esc(tRemark)}
+                </div>
+              ` : '';
+            })()}
             ${t.note ? `
               <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; color:#1e40af; font-size:14.5px;">
                 <b>บันทึกความคืบหน้าจากเจ้าหน้าที่:</b> ${esc(t.note)}

@@ -47,7 +47,8 @@ window.exportAdminTickets = function() {
     'หมวดหมู่',
     'อาคาร',
     'ชั้น',
-    'ห้อง/บริเวณ',
+    'ห้อง',
+    'บริเวณพื้นที่',
     'หมายเลขครุภัณฑ์',
     'ผู้แจ้งซ่อม',
     'หน่วยงาน',
@@ -56,13 +57,16 @@ window.exportAdminTickets = function() {
     'ช่างผู้รับผิดชอบ',
     'สถานะ',
     'งบประมาณ (บาท)',
-    'รายละเอียดปัญหา'
+    'รายละเอียดปัญหา',
+    'หมายเหตุเพิ่มเติม'
   ];
 
   const rows = list.map(t => {
     const rep = (typeof getReporterInfo === 'function') ? getReporterInfo(t) : { name: t.name, org: t.org, tel: t.tel, email: t.email };
     const stLabel = (typeof ST !== 'undefined' && ST[t.status]) ? ST[t.status][0] : t.status;
     const bg = (typeof ticketBudget === 'function') ? (ticketBudget(t.id) || 0) : 0;
+    const tArea = (typeof getTicketArea === 'function') ? getTicketArea(t) : (t.area || t.items?.[0]?.area || '');
+    const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
     return [
       t.id || t.no || '',
       t.created_at ? fmt(t.created_at) : (t.date || ''),
@@ -71,6 +75,7 @@ window.exportAdminTickets = function() {
       t.bld || '-',
       t.flr || '-',
       t.room || '-',
+      tArea || '-',
       t.items?.[0]?.asset || t.asset_no || t.asset || '-',
       rep.name,
       rep.org,
@@ -79,7 +84,8 @@ window.exportAdminTickets = function() {
       t.tech_name || 'ยังไม่มอบหมาย',
       stLabel,
       bg,
-      (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || '-')
+      (typeof getTicketDesc === 'function') ? getTicketDesc(t) : (t.desc || '-'),
+      tRemark || '-'
     ];
   });
 
@@ -1468,7 +1474,7 @@ function vAll() {
                   </span>
                   <span class="done-compact-title" style="font-weight:700; color:#0b2545; font-size:15.5px;">${esc(titleText)}</span>
                   ${assetNo ? `<span style="font-size:12.5px; font-family:monospace; color:#c2410c; background:#fff7ed; padding:1px 6px; border-radius:4px; border:1px solid #fed7aa;">🏷️ ${esc(assetNo)}</span>` : ''}
-                  <span class="done-compact-loc" style="font-size:13.5px; color:#64748b;">📍 อาคาร ${esc(cleanBld)} ชั้น ${esc(t.flr || '-')} (ห้อง ${esc(t.room || '-')})</span>
+                  <span class="done-compact-loc" style="font-size:13.5px; color:#64748b;">📍 ${esc(formatTicketLocation(t))}</span>
                   <span style="font-size:13px; font-weight:700; color:${t.tech_name ? '#0369a1' : '#64748b'}; background:${t.tech_name ? '#f0f9ff' : '#f8fafc'}; border:1px solid ${t.tech_name ? '#bae6fd' : '#cbd5e1'}; padding:2px 8px; border-radius:6px; white-space:nowrap;">
                     👨‍🔧 ${t.tech_name ? `ช่าง: ${esc(t.tech_name)}` : '<span style="color:#94a3b8;">ยังไม่ได้มอบหมาย</span>'}
                   </span>
@@ -1585,7 +1591,7 @@ window.openAdminTicketModal = function(id) {
               </button>
             </div>
             <div>
-              <b>สถานที่ :</b> <b>อาคาร</b> ${esc(cleanBld)}${t.bld_other ? ` (${esc(t.bld_other)})` : ''} <b>ชั้น</b> ${esc(t.flr || '-')} <b>ห้อง/บริเวณ</b> ${esc(t.room || '-')}
+              <b>สถานที่ :</b> ${esc(formatTicketLocation(t))}
             </div>
             <div><b>ผู้แจ้งซ่อม :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.name)}</span></div>
             <div><b>หน่วยงาน / สังกัด :</b> <span style="font-weight:700; color:#0b2545;">${esc(rep.org)}</span></div>
@@ -1598,6 +1604,17 @@ window.openAdminTicketModal = function(id) {
             <b style="display:block; margin-bottom:4px; color:#0b2545; font-size:14.5px;">รายละเอียดปัญหา:</b>
             <div style="color:#0f172a; line-height:1.6; font-size:14.5px;">${esc(descText)}</div>
           </div>
+
+          <!-- หมายเหตุเพิ่มเติมจากผู้แจ้ง -->
+          ${(() => {
+            const tRemark = (typeof getTicketRemark === 'function') ? getTicketRemark(t) : (t.remark || t.items?.[0]?.remark || '');
+            return tRemark ? `
+              <div style="margin-top:10px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 14px;">
+                <b style="display:block; margin-bottom:4px; color:#166534; font-size:14px;">📌 หมายเหตุเพิ่มเติม:</b>
+                <div style="color:#14532d; font-size:14.5px; font-weight:600;">${esc(tRemark)}</div>
+              </div>
+            ` : '';
+          })()}
 
           <!-- รูปภาพตอนแจ้ง -->
           ${photos.length ? `
@@ -2331,7 +2348,7 @@ function vAssetCheck() {
     return {
       code,
       name: equipName,
-      location: `อาคาร ${latestTicket.bld || '-'} ชั้น ${latestTicket.flr || '-'} (${latestTicket.room || '-'})`,
+      location: formatTicketLocation(latestTicket),
       count: tickets.length,
       tickets
     };
@@ -2390,7 +2407,7 @@ function vAssetCheck() {
       code: matchedAssetCode,
       name: equipName,
       cat: first.cat || first.sub_type || 'ทั่วไป',
-      location: `อาคาร ${first.bld || '-'} ชั้น ${first.flr || '-'} (ห้อง/บริเวณ ${first.room || '-'})`,
+      location: formatTicketLocation(first),
       repairsCount: searchResults.length,
       allTimeCount: rawSearchResults.length,
       totalBudget: totalBudget,
