@@ -108,7 +108,7 @@ window.updateDraft = function(key, val) {
 
 // Screen 1: หน้าหลัก (User Dashboard)
 function vHome() {
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+  const myT = (typeof getMyTickets === 'function') ? getMyTickets() : JSON.parse(localStorage.getItem('myT') || '[]');
   
   // Real stats calculation from myT (Matching the reporter's history and real tickets)
   const validList = myT.filter(t => t.status !== 'deleted');
@@ -790,12 +790,15 @@ window.confirmSubmitReport = async function(e) {
     }
     if (error && !CONFIG.DEV) throw error;
 
-    // Save to localStorage myT
-    const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+    // Save to user tickets
+    const myT = (typeof getMyTickets === 'function') ? getMyTickets() : JSON.parse(localStorage.getItem('myT') || '[]');
     myT.unshift({
       no: no,
+      id: no,
+      user_id: me?.id && isUUID(me.id) ? me.id : null,
       title: newReportDraft.title,
       details: newReportDraft.details,
+      desc: newReportDraft.details,
       asset_no: newReportDraft.asset_no || '',
       type: chosenType,
       bld: chosenBld,
@@ -806,9 +809,16 @@ window.confirmSubmitReport = async function(e) {
       remark: newReportDraft.remark?.trim() || '',
       email: payload.email,
       status: 'accepted',
+      urgent: payload.urgent,
+      photos: photos,
+      created_at: new Date().toISOString(),
       date: new Date().toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric' })
     });
-    localStorage.setItem('myT', JSON.stringify(myT));
+    if (typeof saveMyTickets === 'function') {
+      saveMyTickets(myT);
+    } else {
+      localStorage.setItem('myT', JSON.stringify(myT));
+    }
 
     // Also update in memory T if technician or admin is logged in
     if (window.T) {
@@ -905,7 +915,7 @@ window.goToHistoryWithFilter = function(filterKey) {
 
 // Screen: ประวัติการแจ้งซ่อม (History) - รองรับตัวกรอง 4 หมวด + กรองปีและเดือน
 function vHistory() {
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+  const myT = (typeof getMyTickets === 'function') ? getMyTickets() : JSON.parse(localStorage.getItem('myT') || '[]');
   const validList = myT.filter(t => t.status !== 'deleted');
   
   const totalCount = validList.length;
@@ -1196,8 +1206,9 @@ function vProfile() {
             ` : ''}
           </div>
 
-          <div class="profile-actions-bar" style="margin-top:28px;">
+          <div class="profile-actions-bar" style="margin-top:28px; display:flex; flex-wrap:wrap; gap:10px;">
             <button type="button" class="btn btn-outline" style="min-width:120px; font-size:15.5px;" onclick="setProfileEditMode(false)">ยกเลิก</button>
+            <button type="button" class="btn btn-outline" style="border-color:#0284c7; color:#0284c7; font-weight:700; font-size:15px; padding:8px 18px;" onclick="openChangePasswordModal()">🔑 เปลี่ยนรหัสผ่าน</button>
             <button type="submit" class="btn btn-primary" style="min-width:180px; font-size:16px; font-weight:800; background:linear-gradient(135deg, #0b2545 0%, #134074 100%);">💾 บันทึกการเปลี่ยนแปลง</button>
           </div>
         </form>
@@ -1261,11 +1272,29 @@ function vProfile() {
           </div>
         </div>
 
-        <div class="profile-actions-bar">
-          <button type="button" class="btn btn-primary" style="min-width:180px; font-size:15.5px; font-weight:700; background:linear-gradient(135deg, #0b2545 0%, #134074 100%);" onclick="setProfileEditMode(true)">
+        <!-- กล่องความปลอดภัยของบัญชี (Security & Password) -->
+        <div style="margin-top:20px; padding:16px 20px; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div style="font-weight:700; color:#0b2545; font-size:15px; display:flex; align-items:center; gap:8px;">
+              <span style="font-size:18px;">🔒</span> <span>ความปลอดภัยของบัญชี</span>
+            </div>
+            <div style="font-size:13.5px; color:#64748b; margin-top:3px;">
+              คุณสามารถกำหนดรหัสผ่านใหม่สำหรับเข้าสู่ระบบได้ตลอดเวลา
+            </div>
+          </div>
+          <button type="button" class="btn btn-outline" style="border-color:#0284c7; color:#0284c7; font-weight:700; font-size:14.5px; padding:8px 18px; border-radius:8px;" onclick="openChangePasswordModal()">
+            🔑 เปลี่ยนรหัสผ่านใหม่
+          </button>
+        </div>
+
+        <div class="profile-actions-bar" style="margin-top:24px; display:flex; flex-wrap:wrap; gap:10px;">
+          <button type="button" class="btn btn-primary" style="min-width:170px; font-size:15.5px; font-weight:700; background:linear-gradient(135deg, #0b2545 0%, #134074 100%);" onclick="setProfileEditMode(true)">
             ✏️ แก้ไขข้อมูลส่วนตัว
           </button>
-          <button type="button" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger); min-width:140px; font-size:15.5px; font-weight:700;" onclick="signOut()">
+          <button type="button" class="btn btn-outline" style="min-width:150px; font-size:15.5px; font-weight:700; border-color:#0284c7; color:#0284c7;" onclick="openChangePasswordModal()">
+            🔑 เปลี่ยนรหัสผ่าน
+          </button>
+          <button type="button" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger); min-width:130px; font-size:15.5px; font-weight:700;" onclick="signOut()">
             ออกจากระบบ
           </button>
         </div>
@@ -1273,6 +1302,114 @@ function vProfile() {
     </div>
   `;
 }
+
+// ==========================================================================
+// Modal เปลี่ยนรหัสผ่านสำหรับทุกยูสเซอร์ (Change Password Modal)
+// ==========================================================================
+window.openChangePasswordModal = function() {
+  const dlg = document.getElementById('dlg');
+  if (!dlg) return;
+
+  const currentEmail = me?.email || localStorage.getItem('last_reporter_email') || 'บัญชีของคุณ';
+
+  dlg.innerHTML = `
+    <div style="background:#ffffff; color:#0f172a; font-family:'Prompt','Noto Sans Thai',sans-serif; overflow:hidden; border-radius:18px; max-width:440px; margin:0 auto; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg, #0b2545 0%, #134074 100%); color:#ffffff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:20px;">🔑</span>
+          <span style="font-size:18px; font-weight:800;">เปลี่ยนรหัสผ่านใหม่</span>
+        </div>
+        <button type="button" onclick="document.getElementById('dlg').close()" style="background:rgba(255,255,255,0.2); border:none; color:#ffffff; width:34px; height:34px; border-radius:9999px; font-size:22px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="ปิดหน้าต่าง">&times;</button>
+      </div>
+
+      <!-- Body Form -->
+      <form onsubmit="submitChangePassword(event)" style="padding:22px 24px;">
+        <p style="font-size:14px; color:#64748b; margin-top:0; margin-bottom:18px; line-height:1.5;">
+          กำหนดรหัสผ่านใหม่สำหรับ <b>${esc(currentEmail)}</b> (ความยาวอย่างน้อย 6 ตัวอักษร)
+        </p>
+
+        <div style="margin-bottom:16px;">
+          <label style="display:block; font-size:14px; font-weight:700; color:#0b2545; margin-bottom:6px;">รหัสผ่านใหม่ <span style="color:#ef4444;">*</span></label>
+          <div style="position:relative;">
+            <input class="form-control" type="password" id="new_pw" name="new_pw" placeholder="กรอกรหัสผ่านใหม่อย่างน้อย 6 ตัวอักษร" required minlength="6" autocomplete="new-password" style="padding-right:42px; font-size:15px; height:44px; border-radius:8px;">
+            <button type="button" onclick="togglePasswordVis('new_pw', this)" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:18px; color:#64748b; padding:4px;" title="แสดง/ซ่อนรหัสผ่าน">👁️</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <label style="display:block; font-size:14px; font-weight:700; color:#0b2545; margin-bottom:6px;">ยืนยันรหัสผ่านใหม่ <span style="color:#ef4444;">*</span></label>
+          <div style="position:relative;">
+            <input class="form-control" type="password" id="confirm_new_pw" name="confirm_new_pw" placeholder="กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน" required minlength="6" autocomplete="new-password" style="padding-right:42px; font-size:15px; height:44px; border-radius:8px;">
+            <button type="button" onclick="togglePasswordVis('confirm_new_pw', this)" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:18px; color:#64748b; padding:4px;" title="แสดง/ซ่อนรหัสผ่าน">👁️</button>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:22px; border-top:1px solid #e2e8f0; padding-top:16px;">
+          <button type="button" class="btn btn-outline" onclick="document.getElementById('dlg').close()" style="min-width:100px; font-weight:600;">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary" id="btn_submit_change_pw" style="min-width:150px; font-weight:800; background:linear-gradient(135deg, #0b2545 0%, #134074 100%);">✓ ยืนยันเปลี่ยนรหัส</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  dlg.showModal();
+};
+
+window.togglePasswordVis = function(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁️';
+  }
+};
+
+window.submitChangePassword = async function(e) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const p1 = String(f.get('new_pw') || '').trim();
+  const p2 = String(f.get('confirm_new_pw') || '').trim();
+
+  if (p1.length < 6) {
+    return toast('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+  }
+  if (p1 !== p2) {
+    return toast('รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน');
+  }
+
+  const btn = document.getElementById('btn_submit_change_pw');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'กำลังเปลี่ยนรหัสผ่าน...';
+  }
+
+  try {
+    const isDev = (typeof DEV !== 'undefined' && DEV) || (window.CONFIG && window.CONFIG.DEV);
+    const { data, error } = await sb.auth.updateUser({ password: p1 });
+    if (error) {
+      if (isDev) {
+        toast('(โหมดทดสอบ) เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว 🔑');
+        document.getElementById('dlg')?.close();
+        return;
+      }
+      throw error;
+    }
+    toast('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว 🔑');
+    document.getElementById('dlg')?.close();
+  } catch (err) {
+    console.error('Change password error:', err);
+    toast('เปลี่ยนรหัสผ่านไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาด'));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = '✓ ยืนยันเปลี่ยนรหัส';
+    }
+  }
+};
 
 // ==========================================================================
 // Pop-up แสดงรายละเอียดใบงานของผู้แจ้ง (ขึ้นเป็น Modal Popup + ไม่มีปุ่มเบิกวัสดุ)
@@ -1283,7 +1420,7 @@ window.quickTrack = async function (no, email) {
   toast('กำลังโหลดข้อมูลใบงาน ' + cleanNo + '...');
 
   let data = null;
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
+  const myT = (typeof getMyTickets === 'function') ? getMyTickets() : JSON.parse(localStorage.getItem('myT') || '[]');
   const localItem = myT.find(x => (x.no && x.no.toUpperCase() === cleanNo.toUpperCase()) || (x.id && x.id.toUpperCase() === cleanNo.toUpperCase()));
 
   // 1. ลองค้นหาผ่าน RPC track_ticket แบบไม่ระบุอีเมล (ค้นหาด้วย id ผ่าน security definer)

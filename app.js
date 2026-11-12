@@ -389,73 +389,155 @@ window.addEventListener('storage', (e) => {
   }
 });
 
-window.loadHistoryData = async function() {
-  const myT = JSON.parse(localStorage.getItem('myT') || '[]');
-  const reporterEmail = (window.me && window.me.role === 'reporter' ? window.me.email : '') || localStorage.getItem('last_reporter_email') || '';
+// ==========================================================================
+// Isolated Per-User Ticket Storage & Retrieval
+// ==========================================================================
+window.getMyTickets = function() {
+  if (!window.me) return [];
+  const myEmail = (window.me.email || '').toLowerCase().trim();
+  const myId = window.me.id || '';
+  if (!myEmail && !myId) return [];
 
-  // 1. ถ้ามีอีเมลผู้แจ้ง ให้ลองดึงรายการล่าสุดจาก Supabase เพื่อให้สถานะอัปเดตทันที
-  if (reporterEmail) {
+  const userKey = myId ? `myT_${myId}` : `myT_${myEmail}`;
+  let list = [];
+  try {
+    list = JSON.parse(localStorage.getItem(userKey) || '[]');
+  } catch(e) { list = []; }
+
+  // ถ้ายังไม่มีใน userKey ลองดูใน myT เดิม แต่ต้องคัดกรอง "เฉพาะที่เป็นของยูสเซอร์นี้เท่านั้น"
+  if (!list.length) {
     try {
-      const { data: ticketsFromEmail } = await sb.from('tickets')
-        .select('*')
-        .ilike('email', reporterEmail.trim())
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const legacy = JSON.parse(localStorage.getItem('myT') || '[]');
+      list = legacy.filter(t => {
+        if (!t) return false;
+        const tEmail = (t.email || '').toLowerCase().trim();
+        const tUid = t.user_id || '';
+        return (myId && tUid && tUid === myId) || (myEmail && tEmail && tEmail === myEmail);
+      });
+      if (list.length && userKey) {
+        localStorage.setItem(userKey, JSON.stringify(list));
+      }
+    } catch(e) {}
+  }
 
-      if (ticketsFromEmail && ticketsFromEmail.length) {
-        const emailMap = new Map();
-        ticketsFromEmail.forEach(t => {
+  // ป้องกันเด็ดขาด: ต้องตรงกับอีเมลหรือ user_id ของผู้ใช้คนนี้เท่านั้น
+  return list.filter(t => {
+    if (!t) return false;
+    const tEmail = (t.email || '').toLowerCase().trim();
+    const tUid = t.user_id || '';
+    if (myId && tUid && tUid === myId) return true;
+    if (myEmail && tEmail && tEmail === myEmail) return true;
+    return false;
+  });
+};
+
+window.saveMyTickets = function(list) {
+  if (!window.me) return;
+  const myEmail = (window.me.email || '').toLowerCase().trim();
+  const myId = window.me.id || '';
+  if (!myEmail && !myId) return;
+
+  const filtered = (list || []).filter(t => {
+    if (!t) return false;
+    const tEmail = (t.email || '').toLowerCase().trim();
+    const tUid = t.user_id || '';
+    if (myId && tUid && tUid === myId) return true;
+    if (myEmail && tEmail && tEmail === myEmail) return true;
+    return false;
+  });
+
+  const userKey = myId ? `myT_${myId}` : `myT_${myEmail}`;
+  if (userKey) {
+    localStorage.setItem(userKey, JSON.stringify(filtered));
+  }
+  localStorage.setItem('myT', JSON.stringify(filtered));
+};
+
+var getMyTickets = window.getMyTickets;
+var saveMyTickets = window.saveMyTickets;
+
+window.loadHistoryData = async function() {
+  if (!window.me || window.me.role !== 'reporter') return;
+  const reporterEmail = (window.me.email || '').toLowerCase().trim();
+  const reporterId = window.me.id || '';
+  if (!reporterEmail && !reporterId) return;
+
+  try {
+    let query = sb.from('tickets').select('*');
+    if (reporterEmail) {
+      query = query.ilike('email', reporterEmail);
+    } else if (reporterId && isUUID(reporterId)) {
+      query = query.eq('user_id', reporterId);
+    }
+
+    let { data: ticketsFromDb, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    // Fallback ค้นหาด้วย user_id กรณีบันทึกด้วย user_id อย่างเดียว
+    if ((!ticketsFromDb || !ticketsFromDb.length) && reporterId && isUUID(reporterId)) {
+      try {
+        const fallbackRes = await sb.from('tickets').select('*').eq('user_id', reporterId).order('created_at', { ascending: false }).limit(100);
+        if (fallbackRes.data && fallbackRes.data.length) {
+          ticketsFromDb = fallbackRes.data;
+        }
+      } catch (e) {}
+    }
+
+    if (error) {
+      console.warn('loadHistoryData error:', error);
+    }
+
+    const emailMap = new Map();
+    if (ticketsFromDb && ticketsFromDb.length) {
+      ticketsFromDb.forEach(t => {
+        const tEmail = (t.email || '').toLowerCase().trim();
+        const tUid = t.user_id || '';
+        // Strict ownership check: เฉพาะใบงานที่เป็นของยูสเซอร์คนนี้เท่านั้น
+        const isMine = (reporterEmail && tEmail === reporterEmail) || (reporterId && tUid === reporterId);
+        if (isMine) {
           emailMap.set(t.id, {
             no: t.id,
-            title: t.title || 'แจ้งซ่อม/บริการ',
-            type: t.cat || 'ซ่อมแซม',
-            location: `อาคาร ${t.bld || '-'} ชั้น ${t.flr || '-'}`,
+            id: t.id,
+            user_id: t.user_id || reporterId,
+            title: t.title || t.items?.[0]?.item || 'แจ้งซ่อม/บริการ',
+            details: t.details || t.items?.[0]?.sym || t.desc || '',
+            desc: t.details || t.items?.[0]?.sym || t.desc || '',
+            asset_no: t.items?.[0]?.asset || t.asset_no || t.asset || '',
+            type: t.cat || t.sub_type || 'ซ่อมแซม',
+            bld: t.bld || '',
+            flr: t.flr || '',
+            location: formatTicketLocation(t),
             room: t.room || '',
             area: t.area || t.items?.[0]?.area || '',
             remark: t.remark || t.items?.[0]?.remark || '',
-            email: t.email,
+            email: t.email || reporterEmail,
             status: t.status,
+            urgent: t.urgent,
+            photos: t.photos,
+            created_at: t.created_at,
             date: t.created_at ? new Date(t.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'
           });
-        });
+        }
+      });
+    }
 
-        // รวมกับประวัติเดิมที่อาจมีในเครื่อง
-        myT.forEach(oldT => {
-          if (!emailMap.has(oldT.no)) emailMap.set(oldT.no, oldT);
-        });
-
-        const merged = Array.from(emailMap.values());
-        localStorage.setItem('myT', JSON.stringify(merged));
-        if (window.tab === 'history' || window.tab === 'home') render();
-        return;
+    // รวมกับประวัติในเครื่องเฉพาะที่เป็นของยูสเซอร์นี้เท่านั้น
+    const currentMyT = window.getMyTickets();
+    currentMyT.forEach(oldT => {
+      const oldEmail = (oldT.email || '').toLowerCase().trim();
+      const oldUid = oldT.user_id || '';
+      const isMine = (reporterEmail && oldEmail === reporterEmail) || (reporterId && oldUid === reporterId);
+      if (isMine && !emailMap.has(oldT.no)) {
+        emailMap.set(oldT.no, oldT);
       }
-    } catch (e) {
-      console.warn('loadHistoryData direct email fetch warning:', e);
-    }
-  }
+    });
 
-  // 2. ตรวจสอบสถานะใบงานทีละรายการตามประวัติ myT
-  if (!myT.length) return;
-  const promises = myT.map(t => 
-    sb.rpc('track_ticket', { p_id: t.no, p_email: t.email || null })
-      .then(r => r?.data || null, () => null)
-  );
-
-  const results = await Promise.all(promises);
-  let updated = false;
-
-  results.forEach((data, i) => {
-    // track_ticket คืนค่ามาเป็น array
-    const item = Array.isArray(data) ? (data[0] || null) : data;
-    if (item && item.status && myT[i].status !== item.status) {
-      myT[i].status = item.status; 
-      updated = true;
-    }
-  });
-
-  if (updated) {
-    localStorage.setItem('myT', JSON.stringify(myT));
+    const merged = Array.from(emailMap.values());
+    window.saveMyTickets(merged);
     if (window.tab === 'history' || window.tab === 'home') render();
+  } catch (e) {
+    console.warn('loadHistoryData direct email fetch warning:', e);
   }
 };
 
@@ -693,6 +775,8 @@ async function go(silent = false) {
         window.allStaff = allStaff;
         window.techs = techs;
       }
+    } else if (me && me.role === 'reporter') {
+      await window.loadHistoryData();
     }
   } catch (err) {
     console.error('go() error:', err);
@@ -737,6 +821,7 @@ window.login = async function (e) {
       localStorage.setItem('last_logged_in_email', emailVal);
       localStorage.setItem('last_reporter_email', emailVal);
     }
+    localStorage.removeItem('myT');
     
     await load(data.session);
   } catch (err) {
@@ -991,6 +1076,11 @@ window.signOut = function () {
   if (confirm('คุณต้องการออกจากระบบใช่หรือไม่?')) {
     sessionStorage.removeItem('repair_me');
     localStorage.removeItem('repair_me_backup');
+    localStorage.removeItem('myT');
+    localStorage.removeItem('last_reporter_email');
+    localStorage.removeItem('last_logged_in_email');
+    window.T = [];
+    window.U = [];
     if (!DEV) sb.auth.signOut();
     me = null;
     uid = null;
