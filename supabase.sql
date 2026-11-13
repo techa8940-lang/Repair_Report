@@ -5,8 +5,12 @@ create table if not exists public.profiles (
   role text default 'reporter' check (role in ('reporter', 'tech', 'admin')),
   tel text,
   org text,
+  line_user_id text,
   created_at timestamptz default now()
 );
+
+-- เพิ่มคอลัมน์ line_user_id หากมีตารางเดิมอยู่แล้ว
+alter table public.profiles add column if not exists line_user_id text;
 
 -- Trigger สร้างข้อมูลลง profiles อัตโนมัติเมื่อมีการ Register ผ่าน auth.users
 -- ความปลอดภัย: ป้องกันไม่ให้ผู้สมัครผ่านหน้าเว็บทั่วไปกำหนดสิทธิ์ตัวเองเป็น 'admin' โดยตรง

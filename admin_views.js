@@ -916,6 +916,15 @@ window.openEditStaffModal = function(id) {
           <input class="form-control" name="skill" value="${esc(u.skill || '')}" placeholder="เช่น ไฟฟ้า, แสงสว่าง, ระบบปรับอากาศ" style="height:44px; font-size:15px;">
         </div>
 
+        <div id="edit_staff_line_group" class="form-group" style="margin-bottom:14px; display:${isTech ? 'block' : 'none'};">
+          <label style="font-weight:700; color:#0b2545; display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; font-size:14px;">
+            <span>🟢 LINE User ID สำหรับรับแจ้งเตือน (เฉพาะช่าง)</span>
+            <button type="button" class="btn btn-outline btn-sm" style="font-size:11.5px; padding:2px 8px; color:#ef4444; border-color:#ef4444; cursor:pointer;" onclick="document.querySelector('#edit_staff_line_input').value=''; toast('ลบรหัสแล้ว (กดบันทึกการแก้ไขเพื่อยืนยัน)');">✕ ลบออก</button>
+          </label>
+          <input class="form-control" id="edit_staff_line_input" name="line_user_id" value="${esc(u.line_user_id || '')}" placeholder="เช่น U0123456789abcdef0123456789abcde" style="height:44px; font-size:14px; font-family:monospace;">
+          <small class="mut" style="font-size:12px; margin-top:2px; display:block;">* ให้ช่างทักบอท LINE แล้วนำรหัส User ID มาวางที่นี่ (ลบให้ว่างหากไม่ต้องการให้ส่งแจ้งเตือน)</small>
+        </div>
+
         <!-- 6. รีเซ็ต / กำหนดรหัสผ่านใหม่โดยแอดมิน (Admin Direct Password Reset) -->
         <div style="background:#fffbeb; border:1.5px solid #fde68a; border-radius:12px; padding:14px; margin-bottom:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -955,6 +964,8 @@ window.openEditStaffModal = function(id) {
 window.toggleEditStaffRole = function(role) {
   const skillGroup = document.getElementById('edit_staff_skill_group');
   if (skillGroup) skillGroup.style.display = role === 'tech' ? 'block' : 'none';
+  const lineGroup = document.getElementById('edit_staff_line_group');
+  if (lineGroup) lineGroup.style.display = role === 'tech' ? 'block' : 'none';
 };
 
 window.generateRandomStaffPassword = function() {
@@ -1002,6 +1013,7 @@ window.saveEditStaff = async function(e, id) {
   const org = (f.get('org') || '').trim();
   const role_desc = (f.get('role_desc') || (role === 'admin' ? 'ผู้ดูแลระบบ' : role === 'reporter' ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง')).trim();
   const skill = (f.get('skill') || (role === 'tech' ? 'ทั่วไป' : '-')).trim();
+  const line_user_id = (f.get('line_user_id') || '').trim();
   const newPassword = (f.get('new_password') || '').trim();
 
   if (newPassword && newPassword.length < 6) {
@@ -1063,9 +1075,10 @@ window.saveEditStaff = async function(e, id) {
     role,
     tel,
     org,
+    line_user_id: line_user_id || null,
     skill: role === 'tech' ? (skill || 'ทั่วไป') : null
   };
-  const dbPayload = { name, role, tel, org };
+  const dbPayload = { name, role, tel, org, line_user_id: line_user_id || null };
 
   try {
     const res = await sb.from('profiles').update(dbPayload).eq('id', id);

@@ -835,6 +835,19 @@ window.confirmSubmitReport = async function(e) {
     
     setReportStep(3);
     toast('ส่งเรื่องแจ้งซ่อมสำเร็จ!');
+
+    // ส่งข้อความแจ้งเตือนเข้า LINE ช่างทันที
+    if (typeof sendLineNotificationToTechs === 'function') {
+      sendLineNotificationToTechs({
+        no: no,
+        title: newReportDraft.title || 'แจ้งซ่อม/บริการ',
+        location: `${chosenBld} ชั้น ${newReportDraft.flr || '1'} ${newReportDraft.room || ''}`.trim(),
+        urgent: payload.urgent,
+        sender: payload.name || me?.name || 'ผู้ใช้งาน',
+        date: new Date().toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }),
+        url: 'https://nu-seed-repair-amc.vercel.app/'
+      });
+    }
   } catch (err) {
     if (CONFIG.DEV) {
       lastNo = no;
@@ -1105,6 +1118,7 @@ window.saveProfile = async function(e) {
   const telIntVal = (document.getElementById('prof_tel_internal')?.value || '').trim();
   const orgVal = (document.getElementById('prof_org')?.value || '').trim();
   const skillVal = (document.getElementById('prof_skill')?.value || '').trim();
+  const lineVal = (document.getElementById('prof_line_user_id')?.value || '').trim();
 
   if (!nameVal) return toast('กรุณาระบุชื่อ-นามสกุล');
 
@@ -1119,6 +1133,7 @@ window.saveProfile = async function(e) {
 
   if (me?.role === 'tech' || me?.role === 'admin') {
     updatedProfile.skill = skillVal || null;
+    updatedProfile.line_user_id = lineVal || null;
   }
 
   // อัปเดตในหน่วยความจำและ sessionStorage ทันที
@@ -1203,6 +1218,20 @@ function vProfile() {
                 <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:block;">สายงานความชำนาญ ${me?.role === 'admin' ? '(ฝ่ายช่าง / งานเทคนิค)' : '(ช่าง)'}</label>
                 <input class="form-control" id="prof_skill" value="${esc(me?.skill || '')}" placeholder="เช่น ระบบปรับอากาศ, ระบบไฟฟ้า, ระบบประปา" style="font-size:16px; padding:10px 14px;">
               </div>
+
+              <div>
+                <label style="font-weight:700; color:#0b2545; font-size:15px; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between;">
+                  <span>🟢 LINE User ID (รับแจ้งเตือนงานซ่อม)</span>
+                  <span style="display:flex; gap:6px;">
+                    <button type="button" class="btn btn-outline" style="padding:2px 8px; font-size:12px; border-color:#ef4444; color:#ef4444; font-weight:700;" onclick="clearLineUserId('prof_line_user_id')">✕ ลบออก</button>
+                    <button type="button" class="btn btn-outline" style="padding:2px 8px; font-size:12px; border-color:#10b981; color:#059669; font-weight:700;" onclick="testMyLineNotify()">🔔 ทดสอบ</button>
+                  </span>
+                </label>
+                <input class="form-control" id="prof_line_user_id" value="${esc(me?.line_user_id || '')}" placeholder="เช่น U0123456789abcdef0123456789abcde" style="font-size:15px; padding:10px 14px; font-family:monospace;">
+                <small class="mut" style="font-size:12px; margin-top:4px; display:block;">
+                  * ทักบอท LINE เพื่อรับรหัส User ID แล้วนำมาวางที่ช่องนี้ (เว้นว่างไว้หรือกดลบออกหากไม่ต้องการรับแจ้งเตือน)
+                </small>
+              </div>
             ` : ''}
           </div>
 
@@ -1264,6 +1293,17 @@ function vProfile() {
               <span class="profile-label-text"><span>🔧</span> ความชำนาญ / สายงานช่าง:</span>
               <span class="profile-val-text">${me?.skill ? esc(me.skill) : '<span class="profile-empty-dash">-</span>'}</span>
             </div>
+
+            <div class="profile-detail-row">
+              <span class="profile-label-text"><span>💬</span> LINE แจ้งเตือน:</span>
+              <span class="profile-val-text" style="font-size:14px;">
+                ${(me?.line_user_id) ? `
+                  <span style="color:#059669; font-weight:700;">✓ เชื่อมต่อแล้ว</span>
+                  <span style="color:#64748b; font-family:monospace; font-size:12.5px; margin-left:6px;">(${esc(me.line_user_id.substring(0, 8))}...)</span>
+                  <button type="button" class="btn btn-outline" style="padding:2px 8px; font-size:11.5px; margin-left:8px; border-color:#059669; color:#059669;" onclick="testMyLineNotify()">🔔 ทดสอบ</button>
+                ` : '<span class="profile-empty-dash">- ยังไม่ผูก LINE -</span>'}
+              </span>
+            </div>
           ` : ''}
 
           <div class="profile-detail-row">
@@ -1287,6 +1327,107 @@ function vProfile() {
     </div>
   `;
 }
+
+// ==========================================================================
+// ฟังก์ชันระบบแจ้งเตือน LINE สำหรับช่าง (LINE Notification Functions)
+// ==========================================================================
+window.clearLineUserId = function(inputId) {
+  const el = document.getElementById(inputId);
+  if (el) {
+    el.value = '';
+    el.focus();
+    toast('ลบรหัส LINE แล้ว (กด "💾 บันทึกการเปลี่ยนแปลง" เพื่อยืนยัน)');
+  }
+};
+
+window.testMyLineNotify = async function() {
+  const lineInput = document.getElementById('prof_line_user_id')?.value?.trim();
+  const targetId = lineInput || me?.line_user_id || '';
+  if (!targetId) {
+    return toast('กรุณาระบุ LINE User ID ก่อนทดสอบ (ขึ้นต้นด้วยตัว U)');
+  }
+
+  toast('กำลังส่งข้อความทดสอบเข้า LINE...');
+  try {
+    const notifyUrl = window.CONFIG?.LINE_NOTIFY_URL;
+    if (!notifyUrl) throw new Error('ไม่พบการตั้งค่า LINE_NOTIFY_URL ใน config.js');
+
+    await fetch(notifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'notify_ticket',
+        userIds: [targetId],
+        ticket: {
+          no: 'REP-TEST-NOTIFY',
+          title: 'ทดสอบการแจ้งเตือนงานซ่อมผ่าน LINE สำเร็จ!',
+          location: 'ระบบแจ้งเตือนช่าง NU SEED',
+          urgent: false,
+          sender: me?.name || 'ทดสอบระบบ',
+          date: new Date().toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }),
+          url: 'https://nu-seed-repair-amc.vercel.app/'
+        }
+      })
+    });
+    toast('ส่งข้อความทดสอบเข้า LINE เรียบร้อยแล้ว!');
+  } catch (err) {
+    toast('ส่งข้อความไม่สำเร็จ: ' + (err.message || err));
+  }
+};
+
+window.sendLineNotificationToTechs = async function(ticketInfo) {
+  const notifyUrl = window.CONFIG?.LINE_NOTIFY_URL;
+  if (!notifyUrl) return;
+
+  try {
+    let targetUserIds = [];
+
+    // ดึง LINE User ID ของช่างทุกคนจากตาราง public.profiles ใน Supabase
+    if (window.sb) {
+      try {
+        const { data: techs, error } = await sb
+          .from('profiles')
+          .select('line_user_id')
+          .eq('role', 'tech')
+          .not('line_user_id', 'is', null);
+
+        if (!error && techs && techs.length > 0) {
+          techs.forEach(t => {
+            const uid = t.line_user_id?.trim();
+            if (uid && uid.startsWith('U') && !targetUserIds.includes(uid)) {
+              targetUserIds.push(uid);
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Could not query technician LINE IDs from Supabase:', err);
+      }
+    }
+
+    // ถ้าไม่มีช่างคนไหนใส่ LINE ID เลย ให้หยุดการทำงาน
+    if (targetUserIds.length === 0) {
+      console.log('No technician LINE IDs to notify.');
+      return;
+    }
+
+    console.log('Dispatching LINE notifications to technicians:', targetUserIds);
+
+    const payload = {
+      action: 'notify_ticket',
+      userIds: targetUserIds,
+      ticket: ticketInfo
+    };
+
+    fetch(notifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).catch(e => console.warn('LINE Notify dispatch fetch error:', e));
+
+  } catch (err) {
+    console.warn('sendLineNotificationToTechs error:', err);
+  }
+};
 
 // ==========================================================================
 // Modal เปลี่ยนรหัสผ่านสำหรับทุกยูสเซอร์ (Change Password Modal)
