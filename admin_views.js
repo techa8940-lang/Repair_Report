@@ -499,7 +499,7 @@ function vTechsManage() {
                       <div><b style="font-size:13.5px;">${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
                       <div style="color:#64748b; font-size:12px;">${esc(info.org)}</div>
                       ${isTech && t.skill ? `<div style="color:#0284c7; font-size:11.5px;">🛠️ ${esc(t.skill)}</div>` : ''}
-                      ${isTech ? (t.line_user_id ? '<div style="color:#059669; font-size:11.5px; font-weight:700; margin-top:2px;">🟢 ผูก LINE แล้ว</div>' : '<div style="color:#94a3b8; font-size:11.5px; margin-top:2px;">⚪ ยังไม่ผูก LINE</div>') : ''}
+                      ${(isTech || isAdmin) ? (t.line_user_id ? '<div style="color:#059669; font-size:11.5px; font-weight:700; margin-top:2px;">🟢 ผูก LINE แล้ว</div>' : '<div style="color:#94a3b8; font-size:11.5px; margin-top:2px;">⚪ ยังไม่ผูก LINE</div>') : ''}
                     </td>
                     <td style="font-weight:700; font-size:13.5px; white-space:nowrap; text-align:center;">
                       ${info.workDisplay}
@@ -552,7 +552,7 @@ function vTechsManage() {
                   <div>💼 <b>ตำแหน่ง:</b> <span>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</span></div>
                   <div>🏢 <b>หน่วยงาน:</b> <span>${esc(info.org)}</span></div>
                   ${isTech && t.skill ? `<div>🛠️ <b>เชี่ยวชาญ:</b> <span>${esc(t.skill)}</span></div>` : ''}
-                  ${isTech ? (t.line_user_id ? '<div style="color:#059669; font-weight:700;">🟢 <b>LINE:</b> ผูกแล้ว</div>' : '<div style="color:#94a3b8;">⚪ <b>LINE:</b> ยังไม่ผูก</div>') : ''}
+                  ${(isTech || isAdmin) ? (t.line_user_id ? '<div style="color:#059669; font-weight:700;">🟢 <b>LINE:</b> ผูกแล้ว</div>' : '<div style="color:#94a3b8;">⚪ <b>LINE:</b> ยังไม่ผูก</div>') : ''}
                 </div>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #e2e8f0; padding-top:8px; margin-top:2px;">
@@ -943,16 +943,16 @@ window.openEditStaffModal = function(id) {
           <input class="form-control" name="skill" value="${esc(u.skill || '')}" placeholder="เช่น ไฟฟ้า, แสงสว่าง, ระบบปรับอากาศ" style="height:44px; font-size:15px;">
         </div>
 
-        <div id="edit_staff_line_group" class="form-group" style="margin-bottom:14px; display:${isTech ? 'block' : 'none'};">
+        <div id="edit_staff_line_group" class="form-group" style="margin-bottom:14px; display:${(isTech || isAdmin) ? 'block' : 'none'};">
           <label style="font-weight:700; color:#0b2545; display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; font-size:14px;">
-            <span>🟢 LINE User ID สำหรับรับแจ้งเตือน (เฉพาะช่าง)</span>
+            <span>🟢 LINE User ID สำหรับรับแจ้งเตือน (ช่าง / แอดมิน)</span>
             <span style="display:flex; gap:6px;">
               <button type="button" class="btn btn-outline btn-sm" style="font-size:11.5px; padding:2px 8px; color:#ef4444; border-color:#ef4444; cursor:pointer;" onclick="document.querySelector('#edit_staff_line_input').value=''; toast('ลบรหัสแล้ว (กดบันทึกการแก้ไขเพื่อยืนยัน)');">✕ ลบออก</button>
               <button type="button" class="btn btn-outline btn-sm" style="font-size:11.5px; padding:2px 8px; color:#059669; border-color:#10b981; cursor:pointer;" onclick="testStaffLineNotify()">🔔 ทดสอบ</button>
             </span>
           </label>
           <input class="form-control" id="edit_staff_line_input" name="line_user_id" value="${esc(currentLineId)}" placeholder="เช่น U0123456789abcdef0123456789abcde" style="height:44px; font-size:14px; font-family:monospace;">
-          <small class="mut" style="font-size:12px; margin-top:2px; display:block;">* ให้ช่างทักบอท LINE แล้วนำรหัส User ID มาวางที่นี่ (ลบให้ว่างหากไม่ต้องการให้ส่งแจ้งเตือน)</small>
+          <small class="mut" style="font-size:12px; margin-top:2px; display:block;">* ให้ช่างหรือแอดมินทักบอท LINE แล้วนำรหัส User ID มาวางที่นี่ (ลบให้ว่างหากไม่ต้องการให้ส่งแจ้งเตือน)</small>
         </div>
 
         <!-- 6. รีเซ็ต / กำหนดรหัสผ่านใหม่โดยแอดมิน (Admin Direct Password Reset) -->
@@ -995,7 +995,7 @@ window.toggleEditStaffRole = function(role) {
   const skillGroup = document.getElementById('edit_staff_skill_group');
   if (skillGroup) skillGroup.style.display = role === 'tech' ? 'block' : 'none';
   const lineGroup = document.getElementById('edit_staff_line_group');
-  if (lineGroup) lineGroup.style.display = role === 'tech' ? 'block' : 'none';
+  if (lineGroup) lineGroup.style.display = (role === 'tech' || role === 'admin') ? 'block' : 'none';
 };
 
 window.testStaffLineNotify = async function() {

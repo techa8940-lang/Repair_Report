@@ -1178,22 +1178,78 @@ window.saveProfile = async function(e) {
     if (targetT) Object.assign(targetT, updatedProfile);
   }
 
-  // อัปเดตลงตาราง public.profiles ใน Supabase (พร้อม fallback หากคอลัมน์ยังไม่ถูกสร้าง)
+  // อัปเดต User Metadata ใน Supabase Auth เพื่อให้ข้อมูลคงอยู่แม้ตาราง profiles ขาดบางคอลัมน์
   try {
+    if (window.sb && sb.auth && sb.auth.updateUser) {
+      await sb.auth.updateUser({
+        data: {
+          name: nameVal,
+          tel: telVal,
+          tel_internal: telIntVal,
+          org: orgVal,
+          skill: (me?.role === 'tech' || me?.role === 'admin') ? skillVal : null,
+          line_user_id: (me?.role === 'tech' || me?.role === 'admin') ? lineVal : null
+        }
+      });
+    }
+  } catch (authErr) {
+    console.warn('Auth updateUser error:', authErr);
+  }
+
+  // อัปเดตลงตาราง public.profiles ใน Supabase (พร้อม fallback ที่ปลอดภัย ไม่ตัด line_user_id ทิ้ง)
+  try {
+    const fullPayload = {
+      name: nameVal,
+      tel: telVal || null,
+      tel_internal: telIntVal || null,
+      org: orgVal || null
+    };
+
+    if (me?.role === 'tech' || me?.role === 'admin') {
+      fullPayload.skill = skillVal || null;
+      fullPayload.line_user_id = lineVal || null;
+    }
+    if (me?.email) fullPayload.email = me.email;
+
     if (me?.id && typeof isUUID === 'function' && isUUID(me.id)) {
-      let { error } = await sb.from('profiles').update(updatedProfile).eq('id', me.id);
-      if (error && (error.message?.includes('line_user_id') || error.code === '42703')) {
-        console.warn('profiles.line_user_id column not in DB, fallback:', error);
-        const fallbackProfile = { ...updatedProfile };
-        delete fallbackProfile.line_user_id;
-        await sb.from('profiles').update(fallbackProfile).eq('id', me.id);
+      let { error } = await sb.from('profiles').update(fullPayload).eq('id', me.id);
+      if (error) {
+        console.warn('profiles.update full error, trying standard columns with line_user_id:', error);
+        // Fallback 1: คง line_user_id ไว้ ตัดเฉพาะฟิลด์ส่วนขยายออก
+        const basePayload = {
+          name: nameVal,
+          tel: telVal || null,
+          org: orgVal || null
+        };
+        if (me?.role === 'tech' || me?.role === 'admin') {
+          basePayload.line_user_id = lineVal || null;
+        }
+        let res1 = await sb.from('profiles').update(basePayload).eq('id', me.id);
+        if (res1?.error) {
+          console.warn('profiles.update base error, trying without line_user_id:', res1.error);
+          delete basePayload.line_user_id;
+          await sb.from('profiles').update(basePayload).eq('id', me.id);
+        }
       }
     } else if (me?.id) {
-      let { error } = await sb.from('profiles').upsert({ id: me.id, role: me.role, ...updatedProfile }, { onConflict: 'id' });
-      if (error && (error.message?.includes('line_user_id') || error.code === '42703')) {
-        const fallbackProfile = { ...updatedProfile };
-        delete fallbackProfile.line_user_id;
-        await sb.from('profiles').upsert({ id: me.id, role: me.role, ...fallbackProfile }, { onConflict: 'id' });
+      let { error } = await sb.from('profiles').upsert({ id: me.id, role: me.role, ...fullPayload }, { onConflict: 'id' });
+      if (error) {
+        console.warn('profiles.upsert full error, trying base columns:', error);
+        const baseUpsert = {
+          id: me.id,
+          name: nameVal,
+          role: me.role,
+          tel: telVal || null,
+          org: orgVal || null
+        };
+        if (me?.role === 'tech' || me?.role === 'admin') {
+          baseUpsert.line_user_id = lineVal || null;
+        }
+        let res2 = await sb.from('profiles').upsert(baseUpsert, { onConflict: 'id' });
+        if (res2?.error) {
+          delete baseUpsert.line_user_id;
+          await sb.from('profiles').upsert(baseUpsert, { onConflict: 'id' });
+        }
       }
     }
   } catch (err) {
@@ -1423,16 +1479,16 @@ window.sendLineNotificationToTechs = async function(ticketInfo) {
   try {
     let targetUserIds = [];
 
-    // 1. ดึง LINE User ID ของช่างทุกคนจากตาราง public.profiles ใน Supabase
+    // 1. ดึง LINE User ID ของช่างและแอดมินทุกคนจากตาราง public.profiles ใน Supabase
     if (window.sb) {
       try {
-        const { data: dbTechs, error } = await sb
+        const { data: dbRecipients, error } = await sb
           .from('profiles')
           .select('id, role, line_user_id')
-          .eq('role', 'tech');
+          .in('role', ['tech', 'admin']);
 
-        if (!error && dbTechs && dbTechs.length > 0) {
-          dbTechs.forEach(t => {
+        if (!error && dbRecipients && dbRecipients.length > 0) {
+          dbRecipients.forEach(t => {
             const uid = t.line_user_id?.trim();
             if (uid && uid.startsWith('U') && !targetUserIds.includes(uid)) {
               targetUserIds.push(uid);
@@ -1440,7 +1496,7 @@ window.sendLineNotificationToTechs = async function(ticketInfo) {
           });
         }
       } catch (err) {
-        console.warn('Could not query technician LINE IDs from Supabase:', err);
+        console.warn('Could not query technician/admin LINE IDs from Supabase:', err);
       }
     }
 
@@ -1448,7 +1504,7 @@ window.sendLineNotificationToTechs = async function(ticketInfo) {
     try {
       const staffList = (typeof allStaff !== 'undefined' && allStaff.length) ? allStaff : (typeof techs !== 'undefined' ? techs : []);
       staffList.forEach(t => {
-        if (t.role === 'tech' && t.line_user_id?.trim().startsWith('U')) {
+        if ((t.role === 'tech' || t.role === 'admin') && t.line_user_id?.trim().startsWith('U')) {
           const uid = t.line_user_id.trim();
           if (!targetUserIds.includes(uid)) targetUserIds.push(uid);
         }
@@ -1458,7 +1514,7 @@ window.sendLineNotificationToTechs = async function(ticketInfo) {
     try {
       const editedMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
       Object.values(editedMap).forEach(st => {
-        if (st.role === 'tech' && st.line_user_id?.trim().startsWith('U')) {
+        if ((st.role === 'tech' || st.role === 'admin') && st.line_user_id?.trim().startsWith('U')) {
           const uid = st.line_user_id.trim();
           if (!targetUserIds.includes(uid)) targetUserIds.push(uid);
         }

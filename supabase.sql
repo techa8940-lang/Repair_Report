@@ -12,12 +12,18 @@ create table if not exists public.profiles (
 -- เพิ่มคอลัมน์ line_user_id หากมีตารางเดิมอยู่แล้ว
 alter table public.profiles add column if not exists line_user_id text;
 
+-- เพิ่มคอลัมน์ใน profiles หากยังไม่มี
+alter table public.profiles add column if not exists tel_internal text;
+alter table public.profiles add column if not exists skill text;
+alter table public.profiles add column if not exists email text;
+alter table public.profiles add column if not exists line_user_id text;
+
 -- Trigger สร้างข้อมูลลง profiles อัตโนมัติเมื่อมีการ Register ผ่าน auth.users
 -- ความปลอดภัย: ป้องกันไม่ให้ผู้สมัครผ่านหน้าเว็บทั่วไปกำหนดสิทธิ์ตัวเองเป็น 'admin' โดยตรง
 create or replace function public.handle_new_user() 
 returns trigger as $$
 begin
-  insert into public.profiles (id, name, role, tel, org)
+  insert into public.profiles (id, name, role, email, tel, tel_internal, org, skill, line_user_id)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
@@ -25,13 +31,21 @@ begin
       when new.raw_user_meta_data->>'role' = 'tech' then 'tech'
       else 'reporter' -- บังคับให้ role เริ่มต้นเป็น reporter เท่านั้น ไม่อนุญาตให้สมัครเป็น admin ได้เอง
     end,
+    coalesce(new.email, new.raw_user_meta_data->>'email'),
     new.raw_user_meta_data->>'tel',
-    new.raw_user_meta_data->>'org'
+    new.raw_user_meta_data->>'tel_internal',
+    new.raw_user_meta_data->>'org',
+    new.raw_user_meta_data->>'skill',
+    new.raw_user_meta_data->>'line_user_id'
   )
   on conflict (id) do update set
-    name = excluded.name,
-    tel = excluded.tel,
-    org = excluded.org;
+    name = coalesce(excluded.name, public.profiles.name),
+    email = coalesce(excluded.email, public.profiles.email),
+    tel = coalesce(excluded.tel, public.profiles.tel),
+    tel_internal = coalesce(excluded.tel_internal, public.profiles.tel_internal),
+    org = coalesce(excluded.org, public.profiles.org),
+    skill = coalesce(excluded.skill, public.profiles.skill),
+    line_user_id = coalesce(excluded.line_user_id, public.profiles.line_user_id);
   return new;
 end;
 $$ language plpgsql security definer;

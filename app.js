@@ -557,8 +557,14 @@ async function load(s) {
     return;
   }
   uid = s.user.id;
-  const metaRole = s.user.user_metadata?.role;
-  const metaName = s.user.user_metadata?.name;
+  const meta = s.user.user_metadata || {};
+  const metaRole = meta.role;
+  const metaName = meta.name;
+  const metaTel = meta.tel;
+  const metaTelInt = meta.tel_internal;
+  const metaOrg = meta.org;
+  const metaSkill = meta.skill;
+  const metaLineId = meta.line_user_id;
 
   try {
     const { data } = await Promise.race([
@@ -573,18 +579,74 @@ async function load(s) {
       me.role = finalRole;
       me.name = finalName;
       me.email = s.user.email || me.email || localStorage.getItem('last_logged_in_email') || '';
-      if (!data.name || !data.role) {
-        sb.from('profiles').update({ name: finalName, role: finalRole }).eq('id', uid).catch(() => {});
-      }
+
+      // ดึงข้อมูลเพิ่มเติมจาก metadata หรือ localStorage หากใน DB ยังว่างอยู่ (จากการสมัครสมาชิก)
+      if (!me.tel || me.tel === '-') me.tel = metaTel || localStorage.getItem('profile_tel') || '';
+      if (!me.tel_internal || me.tel_internal === '-') me.tel_internal = metaTelInt || localStorage.getItem('profile_tel_internal') || '';
+      if (!me.org || me.org === '-') me.org = metaOrg || localStorage.getItem('profile_org') || '';
+      if (!me.skill || me.skill === '-') me.skill = metaSkill || '';
+      if (!me.line_user_id) me.line_user_id = metaLineId || '';
+
+      // ซิงค์ข้อมูลที่ครบถ้วนกลับเข้า DB profiles ทันที
+      const syncObj = {
+        name: me.name,
+        role: me.role,
+        tel: me.tel || null,
+        tel_internal: me.tel_internal || null,
+        org: me.org || null,
+        skill: (me.role === 'tech' || me.role === 'admin') ? (me.skill || null) : null,
+        line_user_id: me.line_user_id || null,
+        email: me.email || null
+      };
+      sb.from('profiles').update(syncObj).eq('id', uid).then(({ error }) => {
+        if (error) {
+          // ถ้า table ยังไม่มีบางคอลัมน์ ให้ fallback อัปเดตคอลัมน์พื้นฐาน
+          const fallbackObj = {
+            name: me.name,
+            role: me.role,
+            tel: me.tel || null,
+            org: me.org || null,
+            line_user_id: me.line_user_id || null
+          };
+          sb.from('profiles').update(fallbackObj).eq('id', uid).catch(() => {});
+        }
+      }).catch(() => {});
     } else {
       const role = metaRole || (typeof loginRole !== 'undefined' && loginRole ? loginRole : 'reporter');
       me = {
         id: uid,
         name: metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0],
         role: role,
+        tel: metaTel || localStorage.getItem('profile_tel') || '',
+        tel_internal: metaTelInt || localStorage.getItem('profile_tel_internal') || '',
+        org: metaOrg || localStorage.getItem('profile_org') || '',
+        skill: metaSkill || '',
+        line_user_id: metaLineId || '',
         email: s.user.email || localStorage.getItem('last_logged_in_email') || ''
       };
-      sb.from('profiles').upsert({ id: uid, name: me.name, role: me.role }, { onConflict: 'id' }).catch(() => {});
+      const insertObj = {
+        id: uid,
+        name: me.name,
+        role: me.role,
+        tel: me.tel || null,
+        tel_internal: me.tel_internal || null,
+        org: me.org || null,
+        skill: (me.role === 'tech' || me.role === 'admin') ? (me.skill || null) : null,
+        line_user_id: me.line_user_id || null,
+        email: me.email || null
+      };
+      sb.from('profiles').upsert(insertObj, { onConflict: 'id' }).then(({ error }) => {
+        if (error) {
+          sb.from('profiles').upsert({
+            id: uid,
+            name: me.name,
+            role: me.role,
+            tel: me.tel || null,
+            org: me.org || null,
+            line_user_id: me.line_user_id || null
+          }, { onConflict: 'id' }).catch(() => {});
+        }
+      }).catch(() => {});
     }
 
     if (me.email) {
@@ -597,9 +659,20 @@ async function load(s) {
       id: uid,
       name: metaName || (s.user.email || 'ผู้ใช้งาน').split('@')[0],
       role: role,
+      tel: metaTel || localStorage.getItem('profile_tel') || '',
+      tel_internal: metaTelInt || localStorage.getItem('profile_tel_internal') || '',
+      org: metaOrg || localStorage.getItem('profile_org') || '',
+      skill: metaSkill || '',
+      line_user_id: metaLineId || '',
       email: s.user.email || ''
     };
   }
+
+  // แคชค่าใน localStorage สำหรับเติมฟอร์มอัตโนมัติ
+  if (me.tel) localStorage.setItem('profile_tel', me.tel);
+  if (me.tel_internal) localStorage.setItem('profile_tel_internal', me.tel_internal);
+  if (me.org) localStorage.setItem('profile_org', me.org);
+  if (me.name) localStorage.setItem('profile_name', me.name);
 
   // อัปเดตตารางแคชอีเมลในระบบ
   try {
@@ -768,13 +841,16 @@ async function go(silent = false) {
             !(u.name && u.name.startsWith('[DELETED]'))
           )
           .map(u => {
+            const dbLineId = (u.line_user_id || '').trim();
             if (editedStaffMap[u.id]) {
               const cached = editedStaffMap[u.id];
-              const dbLineId = u.line_user_id;
               Object.assign(u, cached);
-              if (cached.line_user_id === undefined && dbLineId) {
+              // หากใน Database มี line_user_id จริงอยู่ ให้ใช้ค่าจาก Database เสมอ
+              if (dbLineId) {
                 u.line_user_id = dbLineId;
               }
+            } else if (dbLineId) {
+              u.line_user_id = dbLineId;
             }
             return u;
           });
@@ -864,6 +940,14 @@ window.register = async function (e) {
   }
 
   toast(`กำลังลงทะเบียนในบทบาท: ${role === 'tech' ? 'ช่างซ่อมบำรุง' : 'ผู้แจ้งซ่อม'}...`);
+
+  // บันทึกข้อมูลลง localStorage ทันทีเพื่อความมั่นใจว่าจะไม่สูญหาย
+  if (name) localStorage.setItem('profile_name', name);
+  if (tel) localStorage.setItem('profile_tel', tel);
+  if (tel_internal) localStorage.setItem('profile_tel_internal', tel_internal);
+  if (org) localStorage.setItem('profile_org', org);
+  if (email) localStorage.setItem('last_reporter_email', email);
+
   const { data, error } = await sb.auth.signUp({
     email,
     password: pw,
@@ -888,20 +972,29 @@ window.register = async function (e) {
     return toast('ลงทะเบียนไม่สำเร็จ: ' + error.message);
   }
 
-  // บันทึก/อัปเดตลงตาราง public.profiles ทันทีให้ครบทุกฟิลด์
+  // บันทึก/อัปเดตลงตาราง public.profiles ทันทีให้ครบทุกฟิลด์ (พร้อม fallback ปลอดภัย)
   if (data?.user?.id) {
     try {
-      const { error: upsertErr } = await sb.from('profiles').upsert({
+      const fullProfile = {
         id: data.user.id,
         name: name,
         role: role,
-        tel: tel,
-        tel_internal: tel_internal,
-        org: org,
-        skill: role === 'tech' ? skill : null
-      }, { onConflict: 'id' });
+        email: email,
+        tel: tel || null,
+        tel_internal: tel_internal || null,
+        org: org || null,
+        skill: role === 'tech' ? (skill || null) : null
+      };
+      const { error: upsertErr } = await sb.from('profiles').upsert(fullProfile, { onConflict: 'id' });
       if (upsertErr) {
-        console.warn('Upsert profile error:', upsertErr);
+        console.warn('Upsert full profile error, falling back to base columns:', upsertErr);
+        await sb.from('profiles').upsert({
+          id: data.user.id,
+          name: name,
+          role: role,
+          tel: tel || null,
+          org: org || null
+        }, { onConflict: 'id' }).catch(() => {});
       }
     } catch (err) {
       console.warn('Profiles table insert failed:', err);
@@ -1043,6 +1136,50 @@ window.saveNewPassword = async function (e) {
   }
 };
 
+// ฟังก์ชันดึงข้อมูลบัญชีพนักงานล่าสุดจาก Supabase ให้แอดมินเห็นแบบเรียลไทม์
+window.refreshAdminStaff = async function() {
+  if (!me || me.role !== 'admin' || !window.sb) return;
+  try {
+    const staffRes = await sb.from('profiles').select('*');
+    const rawStaff = staffRes.data || [];
+    let deletedList = [];
+    try {
+      deletedList = JSON.parse(localStorage.getItem('nusp_deleted_staff') || '[]');
+    } catch(e) {}
+    let editedStaffMap = {};
+    try {
+      editedStaffMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
+    } catch(e) {}
+    allStaff = rawStaff
+      .filter(u => 
+        !deletedList.includes(u.id) && 
+        u.org !== 'DELETED' && 
+        !(u.name && u.name.startsWith('[DELETED]'))
+      )
+      .map(u => {
+        const dbLineId = (u.line_user_id || '').trim();
+        if (editedStaffMap[u.id]) {
+          const cached = editedStaffMap[u.id];
+          Object.assign(u, cached);
+          if (dbLineId) {
+            u.line_user_id = dbLineId;
+          }
+        } else if (dbLineId) {
+          u.line_user_id = dbLineId;
+        }
+        return u;
+      });
+    techs = allStaff.filter(u => u.role === 'tech');
+    window.allStaff = allStaff;
+    window.techs = techs;
+    if (tab === 'techs_manage') {
+      render();
+    }
+  } catch(err) {
+    console.warn('refreshAdminStaff error:', err);
+  }
+};
+
 // ล็อคการทำงานและการเข้าถึงแท็บตาม Role
 window.setTab = function (k) {
   if (!me) {
@@ -1076,6 +1213,7 @@ window.setTab = function (k) {
 
   found = undefined;
   if (tab === 'history' || tab === 'home') loadHistoryData();
+  if (tab === 'techs_manage' && me.role === 'admin') refreshAdminStaff();
   render();
 };
 
