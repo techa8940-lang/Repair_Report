@@ -828,6 +828,16 @@ window.confirmSubmitReport = async function(e) {
       });
     }
 
+    const ticketNotice = {
+      no: no,
+      title: newReportDraft.title || payload.items?.[0]?.item || 'แจ้งซ่อม/บริการ',
+      location: `${chosenBld} ชั้น ${newReportDraft.flr || '1'} ${newReportDraft.room || ''}`.trim(),
+      urgent: payload.urgent,
+      sender: payload.name || me?.name || 'ผู้ใช้งาน',
+      date: new Date().toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }),
+      url: 'https://nu-seed-repair-amc.vercel.app/'
+    };
+
     lastNo = no;
     // Reset draft
     resetReportDraft();
@@ -838,15 +848,7 @@ window.confirmSubmitReport = async function(e) {
 
     // ส่งข้อความแจ้งเตือนเข้า LINE ช่างทันที
     if (typeof sendLineNotificationToTechs === 'function') {
-      sendLineNotificationToTechs({
-        no: no,
-        title: newReportDraft.title || 'แจ้งซ่อม/บริการ',
-        location: `${chosenBld} ชั้น ${newReportDraft.flr || '1'} ${newReportDraft.room || ''}`.trim(),
-        urgent: payload.urgent,
-        sender: payload.name || me?.name || 'ผู้ใช้งาน',
-        date: new Date().toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }),
-        url: 'https://nu-seed-repair-amc.vercel.app/'
-      });
+      sendLineNotificationToTechs(ticketNotice);
     }
   } catch (err) {
     if (CONFIG.DEV) {
@@ -1146,14 +1148,53 @@ window.saveProfile = async function(e) {
   if (telIntVal) localStorage.setItem('profile_tel_internal', telIntVal);
   if (nameVal) localStorage.setItem('profile_name', nameVal);
 
-  // อัปเดตลงตาราง public.profiles ใน Supabase
+  // บันทึกลง nusp_edited_staff เพื่อให้หน้าแอดมินเห็นตรงกันทันที
+  try {
+    const editedMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
+    if (!editedMap[me.id]) editedMap[me.id] = {};
+    Object.assign(editedMap[me.id], updatedProfile);
+    editedMap[me.id].line_user_id = lineVal || null;
+    localStorage.setItem('nusp_edited_staff', JSON.stringify(editedMap));
+  } catch (e) {}
+
+  // บันทึกลง nusp_tech_line_ids เพื่อใช้ส่งแจ้งเตือนทันที
+  try {
+    let techLineIds = JSON.parse(localStorage.getItem('nusp_tech_line_ids') || '[]');
+    if (lineVal && lineVal.startsWith('U')) {
+      if (!techLineIds.includes(lineVal)) techLineIds.push(lineVal);
+    } else {
+      techLineIds = techLineIds.filter(x => x !== me?.line_user_id);
+    }
+    localStorage.setItem('nusp_tech_line_ids', JSON.stringify(techLineIds));
+  } catch (e) {}
+
+  // อัปเดตใน allStaff และ techs ในหน่วยความจำทันที
+  if (typeof allStaff !== 'undefined') {
+    const target = allStaff.find(x => String(x.id) === String(me.id));
+    if (target) Object.assign(target, updatedProfile);
+  }
+  if (typeof techs !== 'undefined') {
+    const targetT = techs.find(x => String(x.id) === String(me.id));
+    if (targetT) Object.assign(targetT, updatedProfile);
+  }
+
+  // อัปเดตลงตาราง public.profiles ใน Supabase (พร้อม fallback หากคอลัมน์ยังไม่ถูกสร้าง)
   try {
     if (me?.id && typeof isUUID === 'function' && isUUID(me.id)) {
-      const { error } = await sb.from('profiles').update(updatedProfile).eq('id', me.id);
-      if (error) console.warn('Supabase profile update warning:', error);
+      let { error } = await sb.from('profiles').update(updatedProfile).eq('id', me.id);
+      if (error && (error.message?.includes('line_user_id') || error.code === '42703')) {
+        console.warn('profiles.line_user_id column not in DB, fallback:', error);
+        const fallbackProfile = { ...updatedProfile };
+        delete fallbackProfile.line_user_id;
+        await sb.from('profiles').update(fallbackProfile).eq('id', me.id);
+      }
     } else if (me?.id) {
-      const { error } = await sb.from('profiles').upsert({ id: me.id, role: me.role, ...updatedProfile }, { onConflict: 'id' });
-      if (error) console.warn('Supabase profile upsert warning:', error);
+      let { error } = await sb.from('profiles').upsert({ id: me.id, role: me.role, ...updatedProfile }, { onConflict: 'id' });
+      if (error && (error.message?.includes('line_user_id') || error.code === '42703')) {
+        const fallbackProfile = { ...updatedProfile };
+        delete fallbackProfile.line_user_id;
+        await sb.from('profiles').upsert({ id: me.id, role: me.role, ...fallbackProfile }, { onConflict: 'id' });
+      }
     }
   } catch (err) {
     console.warn('Profile save db error:', err);
@@ -1382,17 +1423,16 @@ window.sendLineNotificationToTechs = async function(ticketInfo) {
   try {
     let targetUserIds = [];
 
-    // ดึง LINE User ID ของช่างทุกคนจากตาราง public.profiles ใน Supabase
+    // 1. ดึง LINE User ID ของช่างทุกคนจากตาราง public.profiles ใน Supabase
     if (window.sb) {
       try {
-        const { data: techs, error } = await sb
+        const { data: dbTechs, error } = await sb
           .from('profiles')
-          .select('line_user_id')
-          .eq('role', 'tech')
-          .not('line_user_id', 'is', null);
+          .select('id, role, line_user_id')
+          .eq('role', 'tech');
 
-        if (!error && techs && techs.length > 0) {
-          techs.forEach(t => {
+        if (!error && dbTechs && dbTechs.length > 0) {
+          dbTechs.forEach(t => {
             const uid = t.line_user_id?.trim();
             if (uid && uid.startsWith('U') && !targetUserIds.includes(uid)) {
               targetUserIds.push(uid);
@@ -1403,6 +1443,36 @@ window.sendLineNotificationToTechs = async function(ticketInfo) {
         console.warn('Could not query technician LINE IDs from Supabase:', err);
       }
     }
+
+    // 2. ดึงเสริมจาก allStaff / techs ใน memory และ localStorage (ป้องกันกรณี DB ยังไม่ได้รัน SQL)
+    try {
+      const staffList = (typeof allStaff !== 'undefined' && allStaff.length) ? allStaff : (typeof techs !== 'undefined' ? techs : []);
+      staffList.forEach(t => {
+        if (t.role === 'tech' && t.line_user_id?.trim().startsWith('U')) {
+          const uid = t.line_user_id.trim();
+          if (!targetUserIds.includes(uid)) targetUserIds.push(uid);
+        }
+      });
+    } catch(e) {}
+
+    try {
+      const editedMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
+      Object.values(editedMap).forEach(st => {
+        if (st.role === 'tech' && st.line_user_id?.trim().startsWith('U')) {
+          const uid = st.line_user_id.trim();
+          if (!targetUserIds.includes(uid)) targetUserIds.push(uid);
+        }
+      });
+    } catch(e) {}
+
+    try {
+      const savedIds = JSON.parse(localStorage.getItem('nusp_tech_line_ids') || '[]');
+      savedIds.forEach(uid => {
+        if (uid && uid.trim().startsWith('U') && !targetUserIds.includes(uid.trim())) {
+          targetUserIds.push(uid.trim());
+        }
+      });
+    } catch(e) {}
 
     // ถ้าไม่มีช่างคนไหนใส่ LINE ID เลย ให้หยุดการทำงาน
     if (targetUserIds.length === 0) {

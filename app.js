@@ -573,7 +573,9 @@ async function load(s) {
       me.role = finalRole;
       me.name = finalName;
       me.email = s.user.email || me.email || localStorage.getItem('last_logged_in_email') || '';
-      sb.from('profiles').upsert({ id: uid, name: finalName, role: finalRole }, { onConflict: 'id' }).catch(() => {});
+      if (!data.name || !data.role) {
+        sb.from('profiles').update({ name: finalName, role: finalRole }).eq('id', uid).catch(() => {});
+      }
     } else {
       const role = metaRole || (typeof loginRole !== 'undefined' && loginRole ? loginRole : 'reporter');
       me = {
@@ -767,7 +769,12 @@ async function go(silent = false) {
           )
           .map(u => {
             if (editedStaffMap[u.id]) {
-              Object.assign(u, editedStaffMap[u.id]);
+              const cached = editedStaffMap[u.id];
+              const dbLineId = u.line_user_id;
+              Object.assign(u, cached);
+              if (cached.line_user_id === undefined && dbLineId) {
+                u.line_user_id = dbLineId;
+              }
             }
             return u;
           });

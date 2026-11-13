@@ -496,9 +496,10 @@ function vTechsManage() {
                       <div style="font-size:12px; color:#0284c7; font-weight:700; margin-top:2px;"><a href="tel:${esc(info.tel.replace(/[^0-9+]/g, ''))}" style="color:#0284c7; text-decoration:none;" title="แตะเพื่อโทรออก">📞 ${esc(info.tel)}</a></div>
                     </td>
                     <td style="font-size:13px; color:#334155; line-height:1.4;">
-                      <div><b>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
+                      <div><b style="font-size:13.5px;">${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</b></div>
                       <div style="color:#64748b; font-size:12px;">${esc(info.org)}</div>
                       ${isTech && t.skill ? `<div style="color:#0284c7; font-size:11.5px;">🛠️ ${esc(t.skill)}</div>` : ''}
+                      ${isTech ? (t.line_user_id ? '<div style="color:#059669; font-size:11.5px; font-weight:700; margin-top:2px;">🟢 ผูก LINE แล้ว</div>' : '<div style="color:#94a3b8; font-size:11.5px; margin-top:2px;">⚪ ยังไม่ผูก LINE</div>') : ''}
                     </td>
                     <td style="font-weight:700; font-size:13.5px; white-space:nowrap; text-align:center;">
                       ${info.workDisplay}
@@ -551,6 +552,7 @@ function vTechsManage() {
                   <div>💼 <b>ตำแหน่ง:</b> <span>${esc(t.role_desc || (isAdmin ? 'ผู้ดูแลระบบ' : isReporter ? 'ผู้แจ้งซ่อม' : 'ช่างซ่อมบำรุง'))}</span></div>
                   <div>🏢 <b>หน่วยงาน:</b> <span>${esc(info.org)}</span></div>
                   ${isTech && t.skill ? `<div>🛠️ <b>เชี่ยวชาญ:</b> <span>${esc(t.skill)}</span></div>` : ''}
+                  ${isTech ? (t.line_user_id ? '<div style="color:#059669; font-weight:700;">🟢 <b>LINE:</b> ผูกแล้ว</div>' : '<div style="color:#94a3b8;">⚪ <b>LINE:</b> ยังไม่ผูก</div>') : ''}
                 </div>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #e2e8f0; padding-top:8px; margin-top:2px;">
@@ -852,6 +854,14 @@ window.openEditStaffModal = function(id) {
   const displayInfo = (typeof getUserDisplayInfo === 'function') ? getUserDisplayInfo(u) : {};
   const currentEmail = u.email || displayInfo.email || '';
 
+  let currentLineId = u.line_user_id || '';
+  if (!currentLineId) {
+    try {
+      const editedMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
+      if (editedMap[id]?.line_user_id) currentLineId = editedMap[id].line_user_id;
+    } catch(e) {}
+  }
+
   dlg.innerHTML = `
     <div style="padding:22px 24px; max-width:540px; margin:0 auto;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1.5px solid #e2e8f0; padding-bottom:12px;">
@@ -921,7 +931,7 @@ window.openEditStaffModal = function(id) {
             <span>🟢 LINE User ID สำหรับรับแจ้งเตือน (เฉพาะช่าง)</span>
             <button type="button" class="btn btn-outline btn-sm" style="font-size:11.5px; padding:2px 8px; color:#ef4444; border-color:#ef4444; cursor:pointer;" onclick="document.querySelector('#edit_staff_line_input').value=''; toast('ลบรหัสแล้ว (กดบันทึกการแก้ไขเพื่อยืนยัน)');">✕ ลบออก</button>
           </label>
-          <input class="form-control" id="edit_staff_line_input" name="line_user_id" value="${esc(u.line_user_id || '')}" placeholder="เช่น U0123456789abcdef0123456789abcde" style="height:44px; font-size:14px; font-family:monospace;">
+          <input class="form-control" id="edit_staff_line_input" name="line_user_id" value="${esc(currentLineId)}" placeholder="เช่น U0123456789abcdef0123456789abcde" style="height:44px; font-size:14px; font-family:monospace;">
           <small class="mut" style="font-size:12px; margin-top:2px; display:block;">* ให้ช่างทักบอท LINE แล้วนำรหัส User ID มาวางที่นี่ (ลบให้ว่างหากไม่ต้องการให้ส่งแจ้งเตือน)</small>
         </div>
 
@@ -1081,17 +1091,50 @@ window.saveEditStaff = async function(e, id) {
   const dbPayload = { name, role, tel, org, line_user_id: line_user_id || null };
 
   try {
-    const res = await sb.from('profiles').update(dbPayload).eq('id', id);
-    if (res?.error) console.warn('profiles update warning:', res.error);
+    let res = await sb.from('profiles').update(dbPayload).eq('id', id);
+    if (res?.error && (res.error.message?.includes('line_user_id') || res.error.code === '42703')) {
+      console.warn('profiles.line_user_id column not in DB, fallback:', res.error);
+      const fallbackDb = { ...dbPayload };
+      delete fallbackDb.line_user_id;
+      await sb.from('profiles').update(fallbackDb).eq('id', id);
+    }
   } catch (err) {
     console.warn('profiles update error:', err);
   }
 
-  // บันทึกลง localStorage nusp_edited_staff เพื่อให้คงอยู่เมื่อรีเฟรชหน้าจอ
+  // ซิงค์เข้า me และ sessionStorage ทันทีถ้าแก้ไขบัญชีตัวเอง
+  if (me && String(me.id) === String(id)) {
+    Object.assign(me, updatePayload);
+    sessionStorage.setItem('repair_me', JSON.stringify(me));
+  }
+
+  // บันทึกลง localStorage nusp_edited_staff เพื่อให้คงอยู่เมื่อรีเฟรชหน้าจอ (รวม line_user_id)
   try {
     const editedMap = JSON.parse(localStorage.getItem('nusp_edited_staff') || '{}');
-    editedMap[id] = { name, role, tel, org, role_desc, skill: (role === 'tech' ? skill : null), email };
+    editedMap[id] = { 
+      name, 
+      role, 
+      tel, 
+      org, 
+      role_desc, 
+      skill: (role === 'tech' ? skill : null), 
+      email,
+      line_user_id: line_user_id || null 
+    };
     localStorage.setItem('nusp_edited_staff', JSON.stringify(editedMap));
+  } catch (e) {}
+
+  // ซิงค์ nusp_tech_line_ids เพื่อส่งแจ้งเตือนได้ทันที
+  try {
+    let techLineIds = JSON.parse(localStorage.getItem('nusp_tech_line_ids') || '[]');
+    if (line_user_id && line_user_id.startsWith('U')) {
+      if (!techLineIds.includes(line_user_id)) techLineIds.push(line_user_id);
+    } else {
+      // เอา id เดิมออกถ้าเคลียร์ค่า
+      const oldObj = (typeof allStaff !== 'undefined') ? allStaff.find(x => String(x.id) === String(id)) : null;
+      if (oldObj?.line_user_id) techLineIds = techLineIds.filter(x => x !== oldObj.line_user_id);
+    }
+    localStorage.setItem('nusp_tech_line_ids', JSON.stringify(techLineIds));
   } catch (e) {}
 
   // อัปเดตตารางแคชอีเมล
@@ -1111,6 +1154,7 @@ window.saveEditStaff = async function(e, id) {
       Object.assign(target, updatePayload);
       target.role_desc = role_desc;
       if (email) target.email = email;
+      target.line_user_id = line_user_id || null;
     }
   }
 
@@ -1122,6 +1166,7 @@ window.saveEditStaff = async function(e, id) {
         Object.assign(techs[techIdx], updatePayload);
         techs[techIdx].role_desc = role_desc;
         if (email) techs[techIdx].email = email;
+        techs[techIdx].line_user_id = line_user_id || null;
       } else {
         const fullObj = (typeof allStaff !== 'undefined') ? allStaff.find(x => String(x.id) === String(id)) : null;
         if (fullObj) techs.push(fullObj);
