@@ -688,6 +688,11 @@ window.openAddStaffModal = function() {
             <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">ความเชี่ยวชาญ</label>
             <input class="form-control" name="skill" placeholder="เช่น ไฟฟ้า, แสงสว่าง, เครื่องปรับอากาศ" style="height:44px; font-size:15px;">
           </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-weight:700; color:#0b2545; display:block; margin-bottom:4px; font-size:14px;">🟢 LINE User ID สำหรับรับแจ้งเตือน (ถ้ามี)</label>
+            <input class="form-control" name="line_user_id" placeholder="เช่น U0123456789abcdef0123456789abcde" style="height:44px; font-size:14px; font-family:monospace;">
+            <small style="color:#64748b; font-size:12px;">* ทักบอท LINE เพื่อรับรหัส User ID หรือเพิ่มในภายหลังได้</small>
+          </div>
         </div>
 
         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top:1px solid #e2e8f0; padding-top:14px;">
@@ -726,6 +731,7 @@ window.saveNewStaff = async function(e) {
   const tel = (f.get('tel') || '').trim();
   const role_desc = (f.get('role_desc') || (role === 'admin' ? 'ผู้ดูแลระบบ' : 'ช่างเทคนิค')).trim();
   const skill = (f.get('skill') || (role === 'admin' ? '-' : 'ทั่วไป')).trim();
+  const line_user_id = (f.get('line_user_id') || '').trim();
 
   toast(`กำลังสร้างบัญชี ${role === 'admin' ? 'แอดมิน' : 'ช่าง'}...`);
 
@@ -768,6 +774,7 @@ window.saveNewStaff = async function(e) {
     role,
     email,
     tel,
+    line_user_id: line_user_id || null,
     role_desc: role === 'admin' ? 'ผู้ดูแลระบบ' : (role_desc || 'ช่างเทคนิค'),
     skill: role === 'admin' ? '-' : (skill || 'ทั่วไป'),
     status: 'available',
@@ -781,10 +788,20 @@ window.saveNewStaff = async function(e) {
       role,
       tel,
       skill: role === 'tech' ? skill : null,
+      line_user_id: line_user_id || null,
       role_desc: role === 'admin' ? 'ผู้ดูแลระบบ' : role_desc
     }, { onConflict: 'id' });
   } catch (err) {
     console.warn('profiles upsert error:', err);
+  }
+
+  // ซิงค์ nusp_tech_line_ids เพื่อส่งแจ้งเตือนได้ทันที
+  if (line_user_id && line_user_id.startsWith('U')) {
+    try {
+      let techLineIds = JSON.parse(localStorage.getItem('nusp_tech_line_ids') || '[]');
+      if (!techLineIds.includes(line_user_id)) techLineIds.push(line_user_id);
+      localStorage.setItem('nusp_tech_line_ids', JSON.stringify(techLineIds));
+    } catch(e) {}
   }
 
   if (typeof allStaff !== 'undefined') allStaff.unshift(newStaffObj);
@@ -929,7 +946,10 @@ window.openEditStaffModal = function(id) {
         <div id="edit_staff_line_group" class="form-group" style="margin-bottom:14px; display:${isTech ? 'block' : 'none'};">
           <label style="font-weight:700; color:#0b2545; display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; font-size:14px;">
             <span>🟢 LINE User ID สำหรับรับแจ้งเตือน (เฉพาะช่าง)</span>
-            <button type="button" class="btn btn-outline btn-sm" style="font-size:11.5px; padding:2px 8px; color:#ef4444; border-color:#ef4444; cursor:pointer;" onclick="document.querySelector('#edit_staff_line_input').value=''; toast('ลบรหัสแล้ว (กดบันทึกการแก้ไขเพื่อยืนยัน)');">✕ ลบออก</button>
+            <span style="display:flex; gap:6px;">
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:11.5px; padding:2px 8px; color:#ef4444; border-color:#ef4444; cursor:pointer;" onclick="document.querySelector('#edit_staff_line_input').value=''; toast('ลบรหัสแล้ว (กดบันทึกการแก้ไขเพื่อยืนยัน)');">✕ ลบออก</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:11.5px; padding:2px 8px; color:#059669; border-color:#10b981; cursor:pointer;" onclick="testStaffLineNotify()">🔔 ทดสอบ</button>
+            </span>
           </label>
           <input class="form-control" id="edit_staff_line_input" name="line_user_id" value="${esc(currentLineId)}" placeholder="เช่น U0123456789abcdef0123456789abcde" style="height:44px; font-size:14px; font-family:monospace;">
           <small class="mut" style="font-size:12px; margin-top:2px; display:block;">* ให้ช่างทักบอท LINE แล้วนำรหัส User ID มาวางที่นี่ (ลบให้ว่างหากไม่ต้องการให้ส่งแจ้งเตือน)</small>
@@ -976,6 +996,40 @@ window.toggleEditStaffRole = function(role) {
   if (skillGroup) skillGroup.style.display = role === 'tech' ? 'block' : 'none';
   const lineGroup = document.getElementById('edit_staff_line_group');
   if (lineGroup) lineGroup.style.display = role === 'tech' ? 'block' : 'none';
+};
+
+window.testStaffLineNotify = async function() {
+  const lineInput = document.getElementById('edit_staff_line_input')?.value?.trim();
+  if (!lineInput) {
+    return toast('กรุณาระบุ LINE User ID ของช่างก่อนทดสอบ');
+  }
+
+  toast('กำลังส่งข้อความทดสอบเข้า LINE ช่าง...');
+  try {
+    const notifyUrl = window.CONFIG?.LINE_NOTIFY_URL;
+    if (!notifyUrl) throw new Error('ไม่พบการตั้งค่า LINE_NOTIFY_URL ใน config.js');
+
+    await fetch(notifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'notify_ticket',
+        userIds: [lineInput],
+        ticket: {
+          no: 'REP-TEST-ADMIN',
+          title: 'ทดสอบส่งการแจ้งเตือนจากหน้าผู้ดูแลระบบ (Admin) สำเร็จ!',
+          location: 'ระบบจัดการช่าง NU SEED',
+          urgent: false,
+          sender: me?.name || 'ผู้ดูแลระบบ',
+          date: new Date().toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }),
+          url: 'https://nu-seed-repair-amc.vercel.app/'
+        }
+      })
+    });
+    toast('ส่งข้อความทดสอบเข้า LINE ช่างเรียบร้อยแล้ว!');
+  } catch (err) {
+    toast('ส่งข้อความไม่สำเร็จ: ' + (err.message || err));
+  }
 };
 
 window.generateRandomStaffPassword = function() {
